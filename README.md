@@ -1,153 +1,97 @@
-# 🚀 UbaVoy - Plataforma Exprés de Domicilios y Mandados
+# 🚀 UbaVoy v7.0 - Arquitectura Multiapp (3 PWAs Independientes)
 
-**UbaVoy** es una Progressive Web App (PWA) de alto rendimiento, ultraligera y con diseño *Mobile-First* diseñada especialmente para la gestión de domicilios y mandados exprés en la ciudad de **Ubaté, Cundinamarca**.
+**UbaVoy** es la plataforma exprés de domicilios y mandados para **Ubaté, Cundinamarca**. Esta versión v7.0 reestructura el proyecto en **3 Aplicaciones / Progressive Web Apps (PWAs) independientes** que comparten la misma base de datos en **Firebase Firestore (Proyecto 'ubavoy')** y el backend serverless en **FastAPI**.
 
 ![UbaVoy Logo](/public/icon-192.svg)
 
 ---
 
-## 🌟 Características Principales
-
-1. **Interfaz Móvil PWA Instalable**:
-   - Diseño moderno con paleta Verde Esmeralda y Dorado Ámbar, animaciones fluidas, modo oscuro y soporte offline con *Service Worker*.
-   - **Switch de Rol en tiempo real**: alterna instantáneamente entre la vista de **"Pedir Mandado"** (Cliente) y **"Soy Domiciliario"** (Repartidor).
-
-2. **Módulo Cliente ("Pedir Mandado")**:
-   - Formulario directo para especificar la descripción del pedido, Punto A (Origen), Punto B (Destino), Celular WhatsApp y Pago Estimado (COP).
-   - **Rastreo en Vivo**: Barra de progreso y tarjeta interactiva que se actualiza en tiempo real cuando un domiciliario acepta la carrera, con enlace directo para chatear por WhatsApp con el domiciliario asignado.
-
-3. **Módulo Domiciliario ("Soy Domiciliario")**:
-   - **Gestión de Saldo**: Muestra el Saldo Disponible en COP y modal interactivo para recargas vía Nequi/WhatsApp o API REST.
-   - **Feed de Carreras Disponibles**: Conexión en tiempo real (*onSnapshot*) con Firebase Firestore para listar pedidos con estado `pending`.
-   - **Lógica de Aceptación y Comisión**: Valida saldo disponible (mínimo $500 COP), descuenta automáticamente $500 COP de comisión por carrera y abre el chat directo de WhatsApp con el cliente.
-
-4. **Backend Serverless en FastAPI**:
-   - API REST optimizada para **Vercel Serverless Functions**.
-   - Endpoints de salud (`/api/health`), información (`/api/info`) y recargas de domiciliarios (`/api/drivers/recharge`).
-
----
-
-## 📂 Estructura del Proyecto
+## 📂 Estructura del Repositorio
 
 ```
 UbaVoy/
-├── public/
-│   ├── index.html            # Frontend PWA (Tailwind CSS CDN + FontAwesome + JS logic)
-│   ├── manifest.json         # Web App Manifest PWA
-│   ├── sw.js                 # Service Worker (Cache offline & PWA install)
-│   ├── icon-192.svg          # Icono PWA (192x192)
-│   └── icon-512.svg          # Icono PWA (512x512)
+├── apps/
+│   ├── client/               # PWA Cliente (pedir mandados, direcciones guardadas, mapa, rastreo)
+│   │   ├── index.html
+│   │   ├── manifest.json
+│   │   └── sw.js
+│   ├── driver/               # PWA Domiciliario (bolsa de trabajo, saldo, alerta sonora, GPS)
+│   │   ├── index.html
+│   │   ├── manifest.json
+│   │   └── sw.js
+│   └── admin/                # Dashboard Administrador (aprobaciones, saldo, métricas)
+│       ├── index.html
+│       ├── manifest.json
+│       └── sw.js
+├── shared/
+│   └── firebase_config.js    # Credenciales compartidas de Firebase Firestore 'ubavoy'
 ├── api/
 │   └── index.py              # Backend Serverless en FastAPI (Python)
-├── firebase_config.js        # Configuración modular de Firebase Firestore
-├── vercel.json               # Enrutamiento para Vercel Serverless + Frontend Estático
-├── requirements.txt          # Dependencias de Python (FastAPI, Uvicorn, Mangum)
-├── .gitignore                # Ignorados de Git para Python y Vercel
+├── public/
+│   ├── index.html            # Landing / Portal Selector de Aplicaciones
+│   └── icons...
+├── vercel.json               # Configuración de enrutamiento independiente en Vercel
+├── requirements.txt          # Dependencias de Python
 └── README.md                 # Instrucciones de uso y despliegue
 ```
 
 ---
 
-## ⚡ Instalación y Ejecución Local
+## 📱 Aplicaciones Incluidas
 
-### Prerrequisitos
-- **Python 3.9+**
-- Navegador Web moderno (Chrome, Edge, Safari, Firefox)
+1. **App Cliente (`/apps/client/`)**:
+   - PWA enfocado 100% en el usuario cliente.
+   - Autenticación rápida por celular WhatsApp.
+   - Libreta de direcciones guardadas (`🏠 Casa`, `🏢 Trabajo`, `📍 Otra`).
+   - Mapa interactivo Leaflet CartoDB Dark Matter con pin central tipo Uber.
+   - Rastreo en vivo de domiciliario asignado e historial con botón **Repetir Mandado en 1-Clic**.
 
-### 1. Clonar o acceder al repositorio e iniciar Git
-```bash
-cd UbaVoy
-git init
-```
+2. **App Domiciliario (`/apps/driver/`)**:
+   - PWA para repartidores y conductores de Ubaté.
+   - Verificación de aprobación por admin (`is_approved == true`).
+   - Bolsa de trabajo en tiempo real con **Alerta Sonora (Web Audio API)**.
+   - Botón **Aceptar Carrera (-$500 COP)** y navegación **Google Maps GPS**.
+   - Gestión de saldo prepago en COP y recargas por Nequi.
 
-### 2. Configurar entorno virtual de Python e instalar dependencias
-En Windows (PowerShell):
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate
-pip install -r requirements.txt
-```
-
-En Linux / macOS:
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 3. Probar la API de FastAPI localmente
-```bash
-uvicorn api.index:app --reload --port 8000
-```
-Visita la documentación interactiva OpenAPI/Swagger en:
-👉 `http://127.0.0.1:8000/api/docs`
-
-### 4. Probar el Frontend PWA localmente
-Puedes abrir directamente el archivo `public/index.html` en tu navegador o usar un servidor HTTP local de Python:
-```bash
-python -m http.server 3000 --directory public
-```
-Abre en tu navegador:
-👉 `http://localhost:3000`
-
-> 💡 **Nota sobre Firestore:** El proyecto incluye un **Modo Demo Local** (*LocalStorage Fallback*) que permite probar toda la experiencia (publicar mandados, aceptar carreras, descontar saldo y simular recargas) de inmediato sin necesidad de llaves de Firebase.
+3. **Dashboard Administrador (`/apps/admin/`)**:
+   - Aplicación web con puerta de acceso por PIN seguro (PIN por defecto: `1234`).
+   - Switch de **Aprobar / Bloquear** domiciliarios en tiempo real.
+   - Formulario para **acreditar saldo prepago** a cualquier domiciliario en Firestore.
+   - Supervisor general de órdenes y métricas financieras de Ubaté.
 
 ---
 
-## 🔥 Conexión a tu Proyecto de Firebase Firestore
+## ⚡ Ejecución Local
 
-Para conectar el proyecto a tu base de datos de producción en Firebase:
-
-1. Ve a la [Consola de Firebase](https://console.firebase.google.com/) y crea un proyecto llamado `ubavoy`.
-2. Crea una base de datos **Firestore Database** en modo de prueba o producción.
-3. Agrega una aplicación Web a tu proyecto Firebase y copia el objeto de configuración.
-4. Abre el archivo `firebase_config.js` y reemplaza el objeto `firebaseConfig`:
-
-```javascript
-const firebaseConfig = {
-  apiKey: "TU_API_KEY_REAL",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  projectId: "tu-proyecto",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
-};
+### Servidor Local de Estáticos
+Puedes servir el repositorio localmente con cualquier servidor HTTP (ej: Python):
+```bash
+python -m http.server 3000
 ```
+Accede desde tu navegador a:
+- 🌐 **Portal Selector**: `http://localhost:3000/public/`
+- 🛍️ **App Cliente**: `http://localhost:3000/apps/client/`
+- 🛵 **App Domiciliario**: `http://localhost:3000/apps/driver/`
+- 👑 **Dashboard Admin**: `http://localhost:3000/apps/admin/`
 
 ---
 
 ## 🌐 Despliegue en Vercel
 
-El archivo `vercel.json` ya se encuentra preconfigurado para compilar la API de FastAPI en la ruta `/api` y servir los archivos estáticos de `/public` en la raíz `/`.
+### Opción A: Despliegue Único del Repositorio
+El archivo `vercel.json` en la raíz está configurado para servir todas las apps y la API:
+- `/` -> Landing / Selector (`/public/index.html`)
+- `/apps/client/` -> PWA Cliente
+- `/apps/driver/` -> PWA Domiciliario
+- `/apps/admin/` -> Dashboard Administrador
+- `/api/` -> Backend Serverless Python FastAPI
 
-### Opción A: Despliegue mediante Vercel CLI
-```bash
-npm install -g vercel
-vercel
-```
-
-### Opción B: Despliegue desde GitHub
-1. Sube tu código a GitHub:
-   ```bash
-   git add .
-   git commit -m "Inicializar proyecto UbaVoy PWA + FastAPI"
-   git branch -M main
-   git remote add origin https://github.com/tu-usuario/ubavoy.git
-   git push -u origin main
-   ```
-2. Importa el repositorio desde el panel de [Vercel](https://vercel.com/new).
-3. Vercel detectará automáticamente la función Python en `api/index.py` y los archivos estáticos. ¡Haz clic en **Deploy**!
+### Opción B: Despliegue Independiente por Proyecto en Vercel
+En el panel de Vercel, puedes crear 3 proyectos diferentes conectados al mismo repositorio de GitHub configurando el **Root Directory** en:
+- `apps/client` para la App de Clientes
+- `apps/driver` para la App de Domiciliarios
+- `apps/admin` para el Dashboard Administrador
 
 ---
 
-## 🛠️ Tecnologías Utilizadas
-
-- **Frontend**: HTML5 Semantic, JavaScript Vanilla (ES6+), Tailwind CSS (CDN), FontAwesome 6, Google Fonts (Outfit / Inter).
-- **PWA**: Web App Manifest v2, Service Worker (offline-first caching strategy).
-- **Base de Datos en Tiempo Real**: Firebase Firestore Client SDK.
-- **Backend Serverless**: Python 3.9+, FastAPI, Pydantic, Mangum ASGI Adapter.
-- **Hosting / Cloud**: Vercel Serverless Functions.
-
----
-
-*Desarrollado para Ubaté, Cundinamarca - UbaVoy Exprés 2026*
+*UbaVoy Ubaté 2026 - Arquitectura Multiapp PWA*

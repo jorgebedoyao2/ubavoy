@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-950 text-slate-100 dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>UbaVoy - Dashboard Administrador</title>
+  
+  <!-- PWA Metadata & Theme -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#9333ea">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="UbaVoy Admin">
+  <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
+  <link rel="apple-touch-icon" href="/icon-192.svg">
+
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#faf5ff',
+              500: '#a855f7',
+              600: '#9333ea',
+              900: '#581c87',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Firebase Compatibility SDKs (v10) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  
+  <!-- Shared Firebase Config File -->
+  <script src="/shared/firebase_config.js"></script>
+
+  <style>
+    body {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      font-family: 'Inter', sans-serif;
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(168, 85, 247, 0.25);
+    }
+    .glass-header {
+      background: rgba(24, 9, 38, 0.92);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-bottom: 1px solid rgba(168, 85, 247, 0.3);
+    }
+  </style>
+</head>
+<body class="h-full bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-purple-500 selection:text-slate-950">
+
+  <!-- CONTENEDOR PRINCIPAL ADMIN -->
+  <div class="max-w-md mx-auto w-full min-h-screen flex flex-col bg-slate-950 shadow-2xl relative border-x border-slate-800/60 pb-20">
+
+    <!-- HEADER ADMIN -->
+    <header class="sticky top-0 z-40 glass-header px-4 py-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-purple-400 flex items-center justify-center shadow-lg shadow-purple-600/30">
+          <i class="fa-solid fa-user-shield text-slate-950 text-lg"></i>
+        </div>
+        <div>
+          <h1 class="font-display font-extrabold text-xl tracking-tight text-white flex items-center gap-1.5">
+            UBA<span class="text-purple-400">VOY</span>
+            <span class="text-[9px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-800">Admin</span>
+          </h1>
+          <p class="text-[11px] text-slate-400 leading-none">Dashboard de Gestión Ubaté</p>
+        </div>
+      </div>
+
+      <button onclick="lockAdminPIN()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-rose-400 font-bold flex items-center gap-1.5 transition-all shadow-md">
+        <i class="fa-solid fa-lock"></i> Bloquear
+      </button>
+    </header>
+
+    <!-- GATE DE ACCESO POR PIN SEGURO -->
+    <div id="pin-gate-modal" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="glass-card w-full max-w-sm rounded-2xl p-6 space-y-4 border border-purple-500/40 text-center shadow-2xl">
+        <div class="w-14 h-14 rounded-full bg-purple-600/20 border border-purple-500/40 mx-auto flex items-center justify-center text-purple-400 text-2xl">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <div>
+          <h3 class="font-display font-extrabold text-lg text-white">Acceso Administrador</h3>
+          <p class="text-xs text-slate-400">Ingresa el PIN de seguridad de UbaVoy (PIN por defecto: 1234)</p>
+        </div>
+
+        <form onsubmit="handleVerifyPIN(event)" class="space-y-3">
+          <input type="password" id="admin-pin-input" maxlength="6" required placeholder="PIN de 4 dígitos"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-center text-xl font-mono text-purple-300 tracking-widest outline-none focus:border-purple-500">
+          <button type="submit" class="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg">
+            Ingresar al Dashboard
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT DASHBOARD ADMIN -->
+    <main id="admin-dashboard-content" class="hidden flex-1 px-4 py-4 space-y-5">
+
+      <!-- TARJETA MÉTRICAS GENERALES -->
+      <div class="glass-card rounded-2xl p-5 border border-purple-500/30 space-y-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <h2 class="font-display font-bold text-base text-white flex items-center gap-2">
+            <i class="fa-solid fa-chart-line text-purple-400"></i> Métricas de la Plataforma
+          </h2>
+          <span class="text-[10px] font-bold text-purple-300 bg-purple-950 px-2.5 py-1 rounded-full border border-purple-800">
+            Ubaté en Vivo
+          </span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <div class="bg-slate-900/90 p-3 rounded-xl text-center border border-slate-800">
+            <p id="admin-stat-drivers" class="font-display font-extrabold text-xl text-purple-400">0</p>
+            <p class="text-[10px] text-slate-400 font-medium">Repartidores</p>
+          </div>
+          <div class="bg-slate-900/90 p-3 rounded-xl text-center border border-slate-800">
+            <p id="admin-stat-orders" class="font-display font-extrabold text-xl text-emerald-400">0</p>
+            <p class="text-[10px] text-slate-400 font-medium">Total Pedidos</p>
+          </div>
+          <div class="bg-slate-900/90 p-3 rounded-xl text-center border border-slate-800">
+            <p id="admin-stat-revenue" class="font-display font-extrabold text-xl text-amber-400">$0</p>
+            <p class="text-[10px] text-slate-400 font-medium">Comisiones</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTOR: REPARTIDORES REGISTRADOS (APROBACIÓN & RECARGA DIRECTA) -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+            <i class="fa-solid fa-users-gear text-purple-400"></i> Gestión de Repartidores
+          </h3>
+          <button onclick="renderAdminDriversList()" class="text-xs text-slate-400 hover:text-white flex items-center gap-1">
+            <i class="fa-solid fa-rotate"></i> Actualizar
+          </button>
+        </div>
+
+        <div id="admin-drivers-feed" class="space-y-3">
+          <div class="glass-card rounded-2xl p-6 text-center text-xs text-slate-400">
+            Cargando lista de repartidores...
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTOR: MONITOR DE ÓRDENES GLOBAL -->
+      <div class="space-y-3">
+        <h3 class="font-display font-bold text-sm text-white flex items-center gap-2 px-1">
+          <i class="fa-solid fa-list-check text-purple-400"></i> Monitor de Órdenes en Tiempo Real
+        </h3>
+        <div id="admin-orders-feed" class="space-y-2.5">
+          <div class="glass-card rounded-2xl p-6 text-center text-xs text-slate-400">
+            Cargando monitor de órdenes...
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- TOAST NOTIFICACIONES -->
+    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-purple-500/40 shadow-xl flex items-center gap-3">
+      <i id="toast-icon" class="fa-solid fa-circle-check text-purple-400 text-base"></i>
+      <span id="toast-message" class="flex-1">Operación exitosa</span>
+    </div>
+
+  </div>
+
+  <!-- JAVASCRIPT LOGIC DASHBOARD ADMIN -->
+  <script>
+    let isFirebaseReady = false;
+    let isUnlocked = localStorage.getItem('ubavoy_admin_unlocked') === 'true';
+
+    let localUsers = JSON.parse(localStorage.getItem('ubavoy_local_users') || JSON.stringify([
+      { phone: '3109876543', name: 'Carlos Mario (Domiciliario)', role: 'driver', is_approved: true, balance: 10000, vehicle: 'Moto Honda 125 - XYZ-12A' },
+      { phone: '3110001122', name: 'Juan Repartidor', role: 'driver', is_approved: false, balance: 5000, vehicle: 'Moto Yamaha FZ 150 - ABC-99Z' }
+    ]));
+    let localOrders = JSON.parse(localStorage.getItem('ubavoy_local_orders') || '[]');
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if (isUnlocked) unlockDashboard();
+      checkFirebaseStatus();
+      registerServiceWorker();
+    });
+
+    function handleVerifyPIN(e) {
+      e.preventDefault();
+      const pin = document.getElementById('admin-pin-input').value;
+      if (pin === '1234' || pin === '0000') {
+        localStorage.setItem('ubavoy_admin_unlocked', 'true');
+        unlockDashboard();
+        showToast('Acceso concedido al Dashboard');
+      } else {
+        showToast('PIN incorrecto', 'error');
+      }
+    }
+
+    function unlockDashboard() {
+      document.getElementById('pin-gate-modal').classList.add('hidden');
+      document.getElementById('admin-dashboard-content').classList.remove('hidden');
+      renderAdminDriversList();
+    }
+
+    function lockAdminPIN() {
+      localStorage.removeItem('ubavoy_admin_unlocked');
+      location.reload();
+    }
+
+    function checkFirebaseStatus() {
+      if (typeof db !== 'undefined' && db !== null && firebaseConfig.apiKey !== "AIzaSyYOUR_API_KEY_HERE") {
+        isFirebaseReady = true;
+        subscribeFirestoreAdmin();
+      } else {
+        isFirebaseReady = false;
+        renderLocalStateAdmin();
+      }
+    }
+
+    function registerServiceWorker() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      }
+    }
+
+    function subscribeFirestoreAdmin() {
+      db.collection('users').onSnapshot(() => renderAdminDriversList());
+      db.collection('orders').onSnapshot((snapshot) => {
+        const orders = [];
+        snapshot.forEach(doc => orders.push(doc.data()));
+        renderAdminOrdersFeed(orders);
+        renderAdminStats(orders);
+      });
+    }
+
+    function renderLocalStateAdmin() {
+      renderAdminDriversList();
+      renderAdminOrdersFeed(localOrders);
+      renderAdminStats(localOrders);
+    }
+
+    async function renderAdminDriversList() {
+      const feed = document.getElementById('admin-drivers-feed');
+      if (!feed) return;
+
+      let drivers = [];
+      if (isFirebaseReady) {
+        try {
+          const snap = await db.collection('users').get();
+          snap.forEach(doc => {
+            const data = doc.data();
+            if (data.role === 'driver') drivers.push(data);
+          });
+        } catch (err) {}
+      } else {
+        drivers = localUsers.filter(u => u.role === 'driver');
+      }
+
+      document.getElementById('admin-stat-drivers').innerText = drivers.length;
+
+      if (drivers.length === 0) {
+        feed.innerHTML = `
+          <div class="glass-card rounded-2xl p-6 text-center text-xs text-slate-400">
+            No hay domiciliarios registrados aún.
+          </div>
+        `;
+        return;
+      }
+
+      feed.innerHTML = drivers.map(driver => `
+        <div class="glass-card rounded-2xl p-4 space-y-3 border border-slate-800 shadow-md">
+          <div class="flex items-center justify-between">
+            <div>
+              <h4 class="font-bold text-sm text-white flex items-center gap-1.5">
+                <i class="fa-solid fa-motorcycle text-amber-400"></i> ${escapeHtml(driver.name)}
+              </h4>
+              <p class="text-xs text-slate-400">WA: ${driver.phone} | ${escapeHtml(driver.vehicle || 'Sin vehículo')}</p>
+            </div>
+
+            <button onclick="toggleDriverApproval('${driver.phone}', ${driver.is_approved !== false})"
+              class="py-1 px-3 rounded-full text-xs font-bold transition-all flex items-center gap-1 ${
+                driver.is_approved !== false
+                  ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                  : 'bg-rose-950 text-rose-400 border border-rose-800'
+              }">
+              <i class="fa-solid ${driver.is_approved !== false ? 'fa-check-circle' : 'fa-ban'}"></i>
+              ${driver.is_approved !== false ? 'Aprobado' : 'Inactivo'}
+            </button>
+          </div>
+
+          <div class="bg-slate-900/90 rounded-xl p-3 flex items-center justify-between border border-slate-800">
+            <div>
+              <span class="text-[11px] text-slate-400 block">Saldo Prepago</span>
+              <span class="font-bold text-sm text-emerald-400">$${(driver.balance || 0).toLocaleString()} COP</span>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <input type="number" id="admin-add-bal-${driver.phone}" placeholder="+ COP" value="5000" step="1000"
+                class="w-24 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none">
+              <button onclick="adminAddDriverBalance('${driver.phone}')"
+                class="py-1 px-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md">
+                + Cargar
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function toggleDriverApproval(phone, currentStatus) {
+      const newStatus = !currentStatus;
+      if (isFirebaseReady) {
+        await db.collection('users').doc(phone).set({ is_approved: newStatus }, { merge: true });
+      } else {
+        const u = localUsers.find(x => x.phone === phone);
+        if (u) {
+          u.is_approved = newStatus;
+          localStorage.setItem('ubavoy_local_users', JSON.stringify(localUsers));
+        }
+      }
+      showToast(`Estado de ${phone} actualizado a: ${newStatus ? 'APROBADO' : 'INACTIVO'}`);
+      renderAdminDriversList();
+    }
+
+    async function adminAddDriverBalance(phone) {
+      const input = document.getElementById(`admin-add-bal-${phone}`);
+      const addAmount = parseInt(input.value) || 0;
+      if (addAmount <= 0) return;
+
+      if (isFirebaseReady) {
+        const ref = db.collection('users').doc(phone);
+        const doc = await ref.get();
+        const currentBal = doc.exists ? (doc.data().balance || 0) : 0;
+        await ref.set({ balance: currentBal + addAmount }, { merge: true });
+      } else {
+        const u = localUsers.find(x => x.phone === phone);
+        if (u) {
+          u.balance = (u.balance || 0) + addAmount;
+          localStorage.setItem('ubavoy_local_users', JSON.stringify(localUsers));
+        }
+      }
+
+      showToast(`Acreditados +$${addAmount.toLocaleString()} COP a ${phone}`);
+      renderAdminDriversList();
+    }
+
+    function renderAdminOrdersFeed(orders) {
+      const feed = document.getElementById('admin-orders-feed');
+      if (!feed) return;
+
+      if (orders.length === 0) {
+        feed.innerHTML = `
+          <div class="glass-card rounded-2xl p-6 text-center text-xs text-slate-400">
+            No hay órdenes registradas.
+          </div>
+        `;
+        return;
+      }
+
+      feed.innerHTML = orders.map(order => `
+        <div class="glass-card rounded-xl p-3 text-xs space-y-1 border border-slate-800">
+          <div class="flex justify-between items-center">
+            <span class="font-mono text-purple-400 font-bold">#${order.id}</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              order.status === 'pending' ? 'bg-amber-950 text-amber-400 border border-amber-800' :
+              order.status === 'assigned' ? 'bg-blue-950 text-blue-400 border border-blue-800' :
+              'bg-emerald-950 text-emerald-400 border border-emerald-800'
+            }">
+              ${(order.status || 'pending').toUpperCase()}
+            </span>
+          </div>
+          <p class="font-semibold text-slate-200">${escapeHtml(order.task_description || order.description || '')}</p>
+          <div class="flex justify-between text-slate-400 text-[11px]">
+            <span>Cliente: ${order.client_phone || order.customerPhone || 'N/A'}</span>
+            <span class="font-bold text-amber-400">$${(order.estimated_price || order.estimatedPrice || 0).toLocaleString()} COP</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderAdminStats(allOrders) {
+      document.getElementById('admin-stat-orders').innerText = allOrders.length;
+      const assignedCount = allOrders.filter(o => o.status === 'assigned' || o.status === 'completed').length;
+      document.getElementById('admin-stat-revenue').innerText = '$' + (assignedCount * 500).toLocaleString() + ' COP';
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-message');
+      const toastIcon = document.getElementById('toast-icon');
+
+      toastMsg.innerText = message;
+      toastIcon.className = type === 'error' ? "fa-solid fa-circle-exclamation text-rose-400 text-base" : "fa-solid fa-circle-check text-purple-400 text-base";
+      toast.className = `fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border ${type === 'error' ? 'border-rose-500/50' : 'border-purple-500/50'} shadow-2xl flex items-center gap-3`;
+
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 4000);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.innerText = text || '';
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

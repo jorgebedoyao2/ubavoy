@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-950 text-slate-100 dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>UbaVoy Domiciliarios - Bolsa de Trabajo Ubaté</title>
+  
+  <!-- PWA Metadata & Theme -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#f59e0b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="UbaVoy Driver">
+  <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
+  <link rel="apple-touch-icon" href="/icon-192.svg">
+
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fffbe6',
+              500: '#f59e0b',
+              600: '#d97706',
+              900: '#78350f',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Firebase Compatibility SDKs (v10) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  
+  <!-- Shared Firebase Config File -->
+  <script src="/shared/firebase_config.js"></script>
+
+  <style>
+    body {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      font-family: 'Inter', sans-serif;
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+    .glass-header {
+      background: rgba(30, 20, 2, 0.92);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+    }
+  </style>
+</head>
+<body class="h-full bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950">
+
+  <!-- CONTENEDOR PRINCIPAL PWA DOMICILIARIO -->
+  <div class="max-w-md mx-auto w-full min-h-screen flex flex-col bg-slate-950 shadow-2xl relative border-x border-slate-800/60 pb-20">
+
+    <!-- HEADER DOMICILIARIO -->
+    <header class="sticky top-0 z-40 glass-header px-4 py-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center shadow-lg shadow-amber-600/30">
+          <i class="fa-solid fa-motorcycle text-slate-950 text-lg"></i>
+        </div>
+        <div>
+          <h1 class="font-display font-extrabold text-xl tracking-tight text-white flex items-center gap-1.5">
+            UBA<span class="text-amber-400">VOY</span>
+            <span class="text-[9px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800">Repartidor</span>
+          </h1>
+          <p class="text-[11px] text-slate-400 leading-none">Bolsa de Carreras en Ubaté</p>
+        </div>
+      </div>
+
+      <!-- BOTÓN MI PERFIL / VEHÍCULO -->
+      <button onclick="openAuthModal()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl px-3 py-1.5 flex items-center gap-2 transition-all shadow-md">
+        <i class="fa-solid fa-id-badge text-amber-400 text-lg"></i>
+        <div class="text-left leading-tight">
+          <p id="header-user-name" class="text-[11px] font-bold text-slate-200 truncate max-w-[100px]">Repartidor</p>
+          <p id="header-user-vehicle" class="text-[9px] text-amber-400 truncate max-w-[90px]">Moto N/A</p>
+        </div>
+      </button>
+    </header>
+
+    <!-- BANNER MODOS DATABASE -->
+    <div id="db-status-banner" class="hidden bg-slate-900 border-b border-slate-800 px-4 py-1.5 text-[11px] text-slate-400 flex items-center justify-between">
+      <span class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+        <span id="db-status-text">⚡ Base de datos en línea (ubavoy)</span>
+      </span>
+      <button onclick="dismissBanner()" class="text-slate-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <!-- MAIN CONTENT DOMICILIARIO -->
+    <main class="flex-1 px-4 py-4 space-y-5">
+
+      <!-- HEADER DE SALDO DOMICILIARIO -->
+      <div class="glass-card rounded-2xl p-5 border border-amber-500/30 space-y-4 shadow-xl">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs font-semibold text-slate-400">Saldo Disponible Prepago</p>
+            <h2 id="driver-balance-display" class="font-display font-extrabold text-3xl text-amber-400 tracking-tight">
+              $10.000 <span class="text-xs font-normal text-slate-400">COP</span>
+            </h2>
+          </div>
+          <button onclick="openRechargeModal()" class="py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 transition-all">
+            <i class="fa-solid fa-wallet"></i> Recargar Nequi
+          </button>
+        </div>
+
+        <!-- SCREEN DE PENDIENTE DE APROBACIÓN POR ADMIN -->
+        <div id="driver-approval-banner" class="hidden bg-amber-950/80 border border-amber-500/50 rounded-xl p-3 text-xs text-amber-200 flex items-center gap-3">
+          <i class="fa-solid fa-clock-rotate-left text-amber-400 text-xl"></i>
+          <div>
+            <p class="font-bold">⚠️ Tu cuenta está en revisión por el Administrador</p>
+            <p class="text-[11px] text-amber-300/80">Un administrador debe autorizar tu cuenta antes de que puedas aceptar carreras.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ALERTA SONORA BANNER -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-300 flex items-center justify-between shadow-md">
+        <span class="flex items-center gap-2">
+          <i class="fa-solid fa-volume-high text-amber-400"></i> Alerta Sonora para Carreras Nuevas
+        </span>
+        <button onclick="playNewOrderSound()" class="text-[11px] bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded text-slate-300 font-semibold">
+          Probar Sonido <i class="fa-solid fa-music"></i>
+        </button>
+      </div>
+
+      <!-- CARRERAS LIBRES EN TIEMPO REAL -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+            <i class="fa-solid fa-list-check text-amber-400"></i> Carreras Libres en Ubaté
+          </h3>
+          <span id="available-count-badge" class="text-xs font-bold text-amber-400 bg-amber-950 px-2.5 py-0.5 rounded-full border border-amber-800">
+            0 Libres
+          </span>
+        </div>
+
+        <div id="orders-feed" class="space-y-3">
+          <div class="glass-card rounded-2xl p-6 text-center text-xs text-slate-400">
+            <i class="fa-solid fa-radar text-2xl text-slate-600 animate-pulse mb-2 block"></i>
+            Escuchando nuevas carreras en tiempo real...
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- MODAL AUTH / REGISTRO DOMICILIARIO -->
+    <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-slate-700 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
+            <i class="fa-solid fa-id-card text-amber-400"></i> Registro de Domiciliario
+          </h3>
+          <button onclick="closeAuthModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <form onsubmit="handleSaveAuthDriver(event)" class="space-y-3.5 text-xs">
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Nombre Completo</label>
+            <input type="text" id="auth-name" required placeholder="Ej: Carlos Gómez"
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-semibold outline-none focus:border-amber-500">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Número WhatsApp (+57)</label>
+            <input type="tel" id="auth-phone" required placeholder="3101234567"
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-semibold outline-none focus:border-amber-500">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Vehículo / Placa</label>
+            <input type="text" id="auth-vehicle" required placeholder="Ej: Moto Yamaha FZ 150 - ABC-12D"
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-amber-500">
+          </div>
+
+          <button type="submit" class="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md">
+            <i class="fa-solid fa-check"></i> Guardar Perfil de Repartidor
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL RECARGAR SALDO -->
+    <div id="recharge-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-slate-700 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
+            <i class="fa-solid fa-mobile-screen-button text-amber-400"></i> Recargar Saldo Nequi
+          </h3>
+          <button onclick="closeRechargeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div class="space-y-3 text-xs text-slate-300">
+          <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 space-y-1 text-center">
+            <p class="text-slate-400">Número Nequi Oficial UbaVoy:</p>
+            <p class="font-mono text-base font-extrabold text-amber-400 tracking-wider">310 000 0000</p>
+          </div>
+
+          <form onsubmit="handleRechargeSubmit(event)" class="space-y-3">
+            <div>
+              <label class="block font-semibold text-slate-400 mb-1">Monto (COP)</label>
+              <input type="number" id="recharge-amount" min="1000" step="1000" value="5000" required
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-bold outline-none">
+            </div>
+
+            <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2">
+              <i class="fa-solid fa-check"></i> Solicitar Recarga
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOAST NOTIFICACIONES -->
+    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-amber-500/40 shadow-xl flex items-center gap-3">
+      <i id="toast-icon" class="fa-solid fa-circle-check text-amber-400 text-base"></i>
+      <span id="toast-message" class="flex-1">Operación exitosa</span>
+    </div>
+
+  </div>
+
+  <!-- JAVASCRIPT LOGIC PWA DOMICILIARIO -->
+  <script>
+    let isFirebaseReady = false;
+    let previousPendingCount = 0;
+
+    let currentDriver = JSON.parse(localStorage.getItem('ubavoy_driver_user') || JSON.stringify({
+      phone: '3109876543',
+      name: 'Carlos Mario (Domiciliario)',
+      role: 'driver',
+      is_approved: true,
+      balance: 10000,
+      vehicle: 'Moto Yamaha FZ 150 - ABC-12D'
+    }));
+
+    let localOrders = JSON.parse(localStorage.getItem('ubavoy_local_orders') || '[]');
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updateHeaderUserUI();
+      checkFirebaseStatus();
+      registerServiceWorker();
+    });
+
+    function checkFirebaseStatus() {
+      const banner = document.getElementById('db-status-banner');
+      const text = document.getElementById('db-status-text');
+
+      if (typeof db !== 'undefined' && db !== null && firebaseConfig.apiKey !== "AIzaSyYOUR_API_KEY_HERE") {
+        isFirebaseReady = true;
+        banner.classList.remove('hidden');
+        banner.className = "bg-amber-950/90 border-b border-amber-800 px-4 py-1 text-[11px] text-amber-300 flex items-center justify-between";
+        text.innerHTML = '<i class="fa-solid fa-cloud-check text-amber-400"></i> ⚡ Base de datos en línea (ubavoy)';
+        setTimeout(() => banner.classList.add('hidden'), 4000);
+        subscribeFirestoreRealtime();
+      } else {
+        isFirebaseReady = false;
+        banner.classList.remove('hidden');
+        text.innerText = "Modo Demo Local (LocalStorage habilitado)";
+        renderLocalStateAll();
+      }
+    }
+
+    function dismissBanner() {
+      document.getElementById('db-status-banner').classList.add('hidden');
+    }
+
+    function registerServiceWorker() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      }
+    }
+
+    function updateHeaderUserUI() {
+      document.getElementById('header-user-name').innerText = currentDriver.name || 'Repartidor';
+      document.getElementById('header-user-vehicle').innerText = currentDriver.vehicle || 'Sin vehículo';
+      updateDriverBalanceUI();
+    }
+
+    function updateDriverBalanceUI() {
+      document.getElementById('driver-balance-display').innerHTML = `
+        $${(currentDriver.balance || 0).toLocaleString()} <span class="text-xs font-normal text-slate-400">COP</span>
+      `;
+
+      const approvalBanner = document.getElementById('driver-approval-banner');
+      if (currentDriver.is_approved === false) {
+        approvalBanner.classList.remove('hidden');
+      } else {
+        approvalBanner.classList.add('hidden');
+      }
+    }
+
+    function openAuthModal() {
+      document.getElementById('auth-name').value = currentDriver.name || '';
+      document.getElementById('auth-phone').value = currentDriver.phone || '';
+      document.getElementById('auth-vehicle').value = currentDriver.vehicle || '';
+      document.getElementById('auth-modal').classList.remove('hidden');
+    }
+
+    function closeAuthModal() {
+      document.getElementById('auth-modal').classList.add('hidden');
+    }
+
+    async function handleSaveAuthDriver(e) {
+      e.preventDefault();
+      const name = document.getElementById('auth-name').value.trim();
+      const phone = document.getElementById('auth-phone').value.trim().replace(/[^0-9]/g, '');
+      const vehicle = document.getElementById('auth-vehicle').value.trim();
+
+      if (!name || !phone) {
+        showToast('Nombre y WhatsApp requeridos', 'error');
+        return;
+      }
+
+      currentDriver = {
+        phone,
+        name,
+        role: 'driver',
+        vehicle: vehicle || 'Moto Domicilios',
+        is_approved: currentDriver.phone === phone ? currentDriver.is_approved : true,
+        balance: currentDriver.phone === phone ? (currentDriver.balance || 10000) : 10000
+      };
+
+      localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
+
+      if (isFirebaseReady) {
+        try {
+          await db.collection('users').doc(phone).set(currentDriver, { merge: true });
+        } catch (err) {}
+      }
+
+      updateHeaderUserUI();
+      closeAuthModal();
+      showToast(`¡Perfil de Domiciliario ${name} guardado!`);
+      if (isFirebaseReady) subscribeFirestoreRealtime();
+      else renderLocalStateAll();
+    }
+
+    function subscribeFirestoreRealtime() {
+      db.collection('orders')
+        .where('status', '==', 'pending')
+        .onSnapshot((snapshot) => {
+          const orders = [];
+          snapshot.forEach(doc => orders.push(doc.data()));
+          
+          if (snapshot.size > previousPendingCount && previousPendingCount !== 0) {
+            playNewOrderSound();
+            showToast('🔔 ¡Nueva carrera disponible en Ubaté!');
+          }
+          previousPendingCount = snapshot.size;
+
+          renderOrdersFeed(orders);
+        });
+
+      if (currentDriver.phone) {
+        db.collection('users').doc(currentDriver.phone).onSnapshot((doc) => {
+          if (doc.exists) {
+            currentDriver = { ...currentDriver, ...doc.data() };
+            localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
+            updateHeaderUserUI();
+          }
+        });
+      }
+    }
+
+    function renderLocalStateAll() {
+      const pending = localOrders.filter(o => o.status === 'pending');
+      renderOrdersFeed(pending);
+    }
+
+    function renderOrdersFeed(orders) {
+      const feed = document.getElementById('orders-feed');
+      const badge = document.getElementById('available-count-badge');
+      badge.innerText = `${orders.length} Libres`;
+
+      if (orders.length === 0) {
+        feed.innerHTML = `
+          <div class="glass-card rounded-2xl p-6 text-center space-y-2">
+            <i class="fa-solid fa-radar text-2xl text-slate-600 animate-pulse mb-1 block"></i>
+            <p class="text-xs text-slate-400">No hay carreras libres en este momento en Ubaté.</p>
+          </div>
+        `;
+        return;
+      }
+
+      feed.innerHTML = orders.map(order => {
+        const coords = order.delivery_coords || order.destinationCoords || { lat: 5.3081, lng: -73.8144 };
+        const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`;
+        const desc = order.task_description || order.description || 'Mandado UbaVoy';
+        const addr = order.delivery_address || order.destination || 'Ubaté';
+        const price = order.estimated_price || order.estimatedPrice || 0;
+
+        return `
+          <div class="glass-card rounded-2xl p-4 space-y-3 border border-slate-800 hover:border-amber-500/40 transition-all shadow-lg">
+            <div class="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-2">
+              <div>
+                <span class="font-mono text-[10px] text-amber-400 font-bold">#${order.id}</span>
+                <h4 class="font-bold text-xs text-slate-100 leading-snug">${escapeHtml(desc)}</h4>
+              </div>
+              <div class="text-right">
+                <span class="text-xs font-extrabold text-emerald-400 block">$${price.toLocaleString()} COP</span>
+              </div>
+            </div>
+
+            <div class="space-y-1 text-xs text-slate-300">
+              <div class="flex items-center gap-1.5 truncate">
+                <i class="fa-solid fa-location-dot text-amber-400 text-xs"></i>
+                <span class="font-semibold text-slate-400">Entrega:</span>
+                <span class="truncate">${escapeHtml(addr)}</span>
+              </div>
+            </div>
+
+            <div class="pt-2 flex flex-col gap-2 border-t border-slate-800/60">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] text-slate-400">Comisión: <strong class="text-amber-400">$500 COP</strong></span>
+                
+                <a href="${googleMapsUrl}" target="_blank"
+                  class="text-[11px] font-bold text-sky-400 bg-sky-950/80 hover:bg-sky-900 border border-sky-800 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                  <i class="fa-solid fa-location-arrow"></i> Navegar con GPS
+                </a>
+              </div>
+
+              <button onclick="acceptOrder('${order.id}')"
+                class="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-motorcycle"></i> Aceptar Carrera (-$500 COP)
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function acceptOrder(orderId) {
+      if (currentDriver.is_approved === false) {
+        showToast('⚠️ Tu cuenta no ha sido aprobada por el Administrador.', 'error');
+        return;
+      }
+
+      if ((currentDriver.balance || 0) < 500) {
+        showToast('Saldo insuficiente ($500 COP). ¡Recarga saldo!', 'error');
+        openRechargeModal();
+        return;
+      }
+
+      const newBalance = (currentDriver.balance || 0) - 500;
+      currentDriver.balance = newBalance;
+      localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
+      updateDriverBalanceUI();
+
+      const updateData = {
+        status: 'assigned',
+        assigned_driver_id: currentDriver.phone,
+        driver_phone: currentDriver.phone,
+        driver_name: currentDriver.name || 'Domiciliario UbaVoy',
+        driver_vehicle: currentDriver.vehicle || 'Moto Domicilios',
+        assigned_at: new Date().toISOString()
+      };
+
+      try {
+        if (isFirebaseReady) {
+          await db.collection('orders').doc(orderId).update(updateData);
+          await db.collection('users').doc(currentDriver.phone).set({ balance: newBalance }, { merge: true });
+        } else {
+          const idx = localOrders.findIndex(o => o.id === orderId);
+          if (idx !== -1) {
+            localOrders[idx] = { ...localOrders[idx], ...updateData };
+            localStorage.setItem('ubavoy_local_orders', JSON.stringify(localOrders));
+            renderLocalStateAll();
+          }
+        }
+
+        showToast('¡Carrera Aceptada! Se descontaron $500 COP de tu saldo.');
+
+        let customerPhone = '';
+        if (isFirebaseReady) {
+          const doc = await db.collection('orders').doc(orderId).get();
+          if (doc.exists) customerPhone = doc.data().client_phone || doc.data().customerPhone;
+        } else {
+          const ord = localOrders.find(o => o.id === orderId);
+          if (ord) customerPhone = ord.client_phone || ord.customerPhone;
+        }
+
+        if (customerPhone) {
+          const text = encodeURIComponent(`Hola, soy ${currentDriver.name} de UbaVoy. ¡Ya voy en camino a entregar tu domicilio!`);
+          window.open(`https://wa.me/57${customerPhone}?text=${text}`, '_blank');
+        }
+      } catch (err) {
+        showToast('Error al aceptar la carrera.', 'error');
+      }
+    }
+
+    function openRechargeModal() {
+      document.getElementById('recharge-modal').classList.remove('hidden');
+    }
+    function closeRechargeModal() {
+      document.getElementById('recharge-modal').classList.add('hidden');
+    }
+    async function handleRechargeSubmit(e) {
+      e.preventDefault();
+      const amount = parseInt(document.getElementById('recharge-amount').value);
+      if (amount < 1000) return;
+
+      currentDriver.balance = (currentDriver.balance || 0) + amount;
+      localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
+      updateDriverBalanceUI();
+
+      if (isFirebaseReady && currentDriver.phone) {
+        db.collection('users').doc(currentDriver.phone).set({ balance: currentDriver.balance }, { merge: true });
+      }
+
+      showToast(`¡Solicitud de recarga de $${amount.toLocaleString()} COP realizada!`);
+      closeRechargeModal();
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-message');
+      const toastIcon = document.getElementById('toast-icon');
+
+      toastMsg.innerText = message;
+      toastIcon.className = type === 'error' ? "fa-solid fa-circle-exclamation text-rose-400 text-base" : "fa-solid fa-circle-check text-amber-400 text-base";
+      toast.className = `fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border ${type === 'error' ? 'border-rose-500/50' : 'border-amber-500/50'} shadow-2xl flex items-center gap-3`;
+
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 4000);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.innerText = text || '';
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

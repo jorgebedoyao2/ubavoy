@@ -1,0 +1,26 @@
+{
+  "name": "UbaVoy Administrador",
+  "short_name": "UbaVoy Admin",
+  "description": "Dashboard Administrador de UbaVoy Ubaté.",
+  "start_url": "/apps/admin/",
+  "scope": "/apps/admin/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#9333ea",
+  "categories": ["business", "utilities"],
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

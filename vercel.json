@@ -6,6 +6,14 @@
       "use": "@vercel/python"
     },
     {
+      "src": "apps/**",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "shared/**",
+      "use": "@vercel/static"
+    },
+    {
       "src": "public/**",
       "use": "@vercel/static"
     }
@@ -14,6 +22,26 @@
     {
       "src": "/api/(.*)",
       "dest": "api/index.py"
+    },
+    {
+      "src": "/shared/(.*)",
+      "dest": "shared/$1"
+    },
+    {
+      "src": "/driver/(.*)",
+      "dest": "apps/driver/$1"
+    },
+    {
+      "src": "/admin/(.*)",
+      "dest": "apps/admin/$1"
+    },
+    {
+      "src": "/client/(.*)",
+      "dest": "apps/client/$1"
+    },
+    {
+      "src": "/apps/(.*)",
+      "dest": "apps/$1"
     },
     {
       "src": "/(.*)",
