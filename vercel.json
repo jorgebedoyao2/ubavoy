@@ -1,11 +1,17 @@
 {
   "version": 2,
-  "rewrites": [
-    { "source": "/driver", "destination": "/apps/driver/index.html" },
-    { "source": "/driver/(.*)", "destination": "/apps/driver/$1" },
-    { "source": "/admin", "destination": "/apps/admin/index.html" },
-    { "source": "/admin/(.*)", "destination": "/apps/admin/$1" },
-    { "source": "/shared/(.*)", "destination": "/shared/$1" },
-    { "source": "/(.*)", "destination": "/apps/client/$1" }
+  "builds": [
+    { "src": "api/index.py", "use": "@vercel/python" },
+    { "src": "apps/**/*", "use": "@vercel/static" },
+    { "src": "shared/**/*", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/driver", "dest": "/apps/driver/index.html" },
+    { "src": "/driver/(.*)", "dest": "/apps/driver/$1" },
+    { "src": "/admin", "dest": "/apps/admin/index.html" },
+    { "src": "/admin/(.*)", "dest": "/apps/admin/$1" },
+    { "src": "/shared/(.*)", "dest": "/shared/$1" },
+    { "src": "/api/(.*)", "dest": "/api/index.py" },
+    { "src": "/(.*)", "dest": "/apps/client/$1" }
   ]
 }
