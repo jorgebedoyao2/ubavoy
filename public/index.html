@@ -2,7 +2,7 @@
 <html lang="es" class="h-full bg-slate-950 text-slate-100 dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-screen-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>UbaVoy - Domicilios y Mandados Exprés Ubaté</title>
   
   <!-- PWA Metadata & Theme -->
@@ -59,11 +59,11 @@
     }
   </script>
 
-  <!-- Firebase Compatibility SDKs -->
+  <!-- Firebase Compatibility SDKs (v10) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   
-  <!-- Firebase Config File & Web Audio API Helper -->
+  <!-- Firebase Config File (Proyecto: ubavoy) -->
   <script src="/firebase_config.js"></script>
 
   <style>
@@ -157,11 +157,11 @@
       </div>
     </header>
 
-    <!-- BANNER MODOS DATABASE -->
+    <!-- BANNER MODOS DATABASE (FIRESTORE vs LOCAL) -->
     <div id="db-status-banner" class="hidden bg-slate-900 border-b border-slate-800 px-4 py-1.5 text-[11px] text-slate-400 flex items-center justify-between">
       <span class="flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-        <span id="db-status-text">Modo Demo Local (Firestore listo para conectar)</span>
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        <span id="db-status-text">⚡ Base de datos en línea (ubavoy)</span>
       </span>
       <button onclick="dismissBanner()" class="text-slate-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
     </div>
@@ -170,11 +170,11 @@
     <main class="flex-1 px-4 py-4 space-y-5">
 
       <!-- ======================================================= -->
-      <!-- VISTA 1: PANEL CLIENTE (ESTÁNDAR RAPPI / UBER EATS) -->
+      <!-- VISTA 1: PANEL CLIENTE (CONEXIÓN FIRESTORE 'orders') -->
       <!-- ======================================================= -->
       <section id="view-client" class="space-y-5">
         
-        <!-- SECTOR 1: GESTIÓN DE DIRECCIONES GUARDADAS (ESTILO RAPPI) -->
+        <!-- SECTOR 1: GESTIÓN DE DIRECCIONES GUARDADAS -->
         <div class="space-y-2">
           <div class="flex items-center justify-between px-1">
             <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
@@ -204,7 +204,7 @@
 
           <form id="order-form" onsubmit="handleCreateOrder(event)" class="space-y-4">
             
-            <!-- Campo 1: ¿Qué necesitas? (TEXTAREA AMIGABLE) -->
+            <!-- task_description -->
             <div>
               <label class="block text-xs font-semibold text-slate-200 mb-1.5">
                 ¿Qué necesitas que llevemos o compremos? <span class="text-rose-400">*</span>
@@ -214,7 +214,7 @@
                 class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 outline-none transition-all resize-none shadow-inner"></textarea>
             </div>
 
-            <!-- Campo 2: Punto de Entrega (ALIMENTADO POR LA DIRECCIÓN SELECCIONADA) -->
+            <!-- delivery_address -->
             <div>
               <label class="block text-xs font-semibold text-slate-200 mb-1.5">
                 Punto de Entrega <span class="text-rose-400">*</span>
@@ -226,7 +226,7 @@
               </div>
             </div>
 
-            <!-- MAPA TIPO UBER EATS (PIN CENTRAL FIJO + BALDOSAS CARTO DB DARK) -->
+            <!-- MAPA TIPO UBER EATS -->
             <div class="space-y-2 pt-1">
               <div class="flex items-center justify-between">
                 <label class="block text-xs font-semibold text-slate-200 flex items-center gap-1.5">
@@ -234,11 +234,9 @@
                 </label>
               </div>
 
-              <!-- CONTENEDOR DE MAPA CON PIN CENTRAL Y BOTÓN FLOTANTE -->
               <div class="relative w-full rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl">
                 <div id="map" class="h-48 w-full z-0 bg-slate-900"></div>
 
-                <!-- PIN FIJO CENTRAL TIPO UBER CON BOUNCE ANIMATION -->
                 <div class="absolute inset-0 pointer-events-none z-10 flex items-center justify-center -mt-6">
                   <div id="uber-center-pin" class="flex flex-col items-center justify-center">
                     <div class="w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow-xl shadow-emerald-500/50 border-2 border-white">
@@ -248,7 +246,6 @@
                   </div>
                 </div>
 
-                <!-- BOTÓN FLOTANTE SOBRE EL MAPA -->
                 <button type="button" onclick="useCurrentLocation()"
                   class="absolute bottom-3 right-3 z-20 bg-slate-900/90 hover:bg-slate-800 text-emerald-400 border border-emerald-500/40 font-bold text-[11px] px-3 py-1.5 rounded-xl shadow-xl backdrop-blur-md flex items-center gap-1.5 transition-all active:scale-95">
                   <span>🎯 Fijar mi Ubicación Actual</span>
@@ -256,7 +253,7 @@
               </div>
             </div>
 
-            <!-- WhatsApp & Pago Estimado -->
+            <!-- client_phone & estimated_price -->
             <div class="grid grid-cols-2 gap-3 pt-1">
               <div>
                 <label class="block text-xs font-semibold text-slate-200 mb-1">Tu WhatsApp</label>
@@ -276,7 +273,6 @@
               </div>
             </div>
 
-            <!-- Botón Principal Neón Esmeralda -->
             <button type="submit" class="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-extrabold text-sm tracking-wide shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
               <span>Solicitar Domiciliario Ahora</span>
               <i class="fa-solid fa-arrow-right"></i>
@@ -320,7 +316,6 @@
               </div>
             </div>
 
-            <!-- Tarjeta Domiciliario Asignado -->
             <div id="driver-assigned-card" class="hidden bg-slate-900 border border-emerald-500/40 rounded-xl p-3 space-y-2">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-lg font-bold">
@@ -356,11 +351,10 @@
       </section>
 
       <!-- ======================================================= -->
-      <!-- VISTA 2: PANEL DOMICILIARIO (BOLSA + GOOGLE MAPS GPS) -->
+      <!-- VISTA 2: PANEL DOMICILIARIO (FIRESTORE 'orders') -->
       <!-- ======================================================= -->
       <section id="view-driver" class="hidden space-y-5">
         
-        <!-- Header Domiciliario: Saldo & Estado de Aprobación -->
         <div class="glass-card rounded-2xl p-5 border border-slate-800 space-y-4 shadow-xl">
           <div class="flex items-center justify-between">
             <div>
@@ -374,7 +368,6 @@
             </button>
           </div>
 
-          <!-- BANNER ESTADO DE APROBACIÓN DEL REPARTIDOR -->
           <div id="driver-approval-banner" class="bg-amber-950/60 border border-amber-500/40 rounded-xl p-3 text-xs text-amber-200 flex items-center gap-2">
             <i class="fa-solid fa-triangle-exclamation text-amber-400 text-base"></i>
             <div>
@@ -384,7 +377,6 @@
           </div>
         </div>
 
-        <!-- ALERTA SONORA BANNER -->
         <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-300 flex items-center justify-between shadow-md">
           <span class="flex items-center gap-2">
             <i class="fa-solid fa-volume-high text-emerald-400"></i> Alerta Sonora Activada
@@ -394,7 +386,6 @@
           </button>
         </div>
 
-        <!-- CARRERAS DISPONIBLES EN TIEMPO REAL -->
         <div class="space-y-3">
           <div class="flex items-center justify-between px-1">
             <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
@@ -416,11 +407,10 @@
       </section>
 
       <!-- ======================================================= -->
-      <!-- VISTA 3: PANEL ADMINISTRADOR (GESTIÓN DE ROLES & SALDO) -->
+      <!-- VISTA 3: PANEL ADMINISTRADOR (FIRESTORE 'users') -->
       <!-- ======================================================= -->
       <section id="view-admin" class="hidden space-y-5">
         
-        <!-- Header Administrador -->
         <div class="glass-card rounded-2xl p-5 border border-purple-500/30 space-y-3 shadow-xl">
           <div class="flex items-center justify-between">
             <h2 class="font-display font-bold text-base text-white flex items-center gap-2">
@@ -434,7 +424,6 @@
             Control de aprobación de domiciliarios, acreditación directa de saldo prepago y supervisión de pedidos en Ubaté.
           </p>
 
-          <!-- Métricas Rápidas -->
           <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800">
             <div class="bg-slate-900 p-2.5 rounded-xl text-center">
               <p id="admin-stat-drivers" class="font-bold text-sm text-purple-400">0</p>
@@ -451,7 +440,6 @@
           </div>
         </div>
 
-        <!-- LISTA DE DOMICILIARIOS REGISTRADOS -->
         <div class="space-y-3">
           <h3 class="font-display font-bold text-sm text-white flex items-center justify-between px-1">
             <span><i class="fa-solid fa-users-gear text-purple-400"></i> Repartidores Registrados</span>
@@ -469,7 +457,7 @@
 
     </main>
 
-    <!-- MODAL AGREGAR NUEVA DIRECCIÓN (ESTILO RAPPI) -->
+    <!-- MODAL AGREGAR NUEVA DIRECCIÓN -->
     <div id="address-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
       <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-slate-700 shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -592,7 +580,7 @@
 
   </div>
 
-  <!-- JAVASCRIPT LOGIC (SAVED ADDRESSES + REPEAT ORDER + LEAFLET MAP + FIRESTORE) -->
+  <!-- JAVASCRIPT LOGIC (FIRESTORE v10 'orders' & 'users' MAP + LEAFLET MAP) -->
   <script>
     // ESTADO GLOBAL
     let currentTab = 'client';
@@ -604,14 +592,14 @@
     let leafletMap = null;
     let deliveryCoords = { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
 
-    // DIRECCIONES GUARDADAS (ESTILO RAPPI)
+    // DIRECCIONES GUARDADAS
     let savedAddresses = JSON.parse(localStorage.getItem('ubavoy_saved_addresses') || JSON.stringify([
       { id: 'addr_1', tag: 'Casa', icon: 'fa-house', address: 'Barrio Santa Bárbara, Calle 6 #7-12', detail: 'Apt 201', coords: { lat: 5.3081, lng: -73.8144 } },
       { id: 'addr_2', tag: 'Trabajo', icon: 'fa-briefcase', address: 'Centro Ubaté, Carrera 7 #8-15', detail: 'Oficina 4', coords: { lat: 5.3110, lng: -73.8130 } }
     ]));
     let activeAddressId = savedAddresses[0] ? savedAddresses[0].id : null;
 
-    // USUARIO LOGUEADO
+    // USUARIO LOGUEADO (`users` schema: phone, name, role, balance, is_approved, vehicle)
     let currentUser = JSON.parse(localStorage.getItem('ubavoy_current_user') || JSON.stringify({
       phone: '3101234567',
       name: 'Usuario UbaVoy',
@@ -621,7 +609,7 @@
       vehicle: 'Moto Yamaha FZ 150 - ABC-12D'
     }));
 
-    // LOCAL STORAGE DEMO BACKUP
+    // DEMO LOCAL BACKUP
     let localUsers = JSON.parse(localStorage.getItem('ubavoy_local_users') || JSON.stringify([
       currentUser,
       { phone: '3109876543', name: 'Carlos Mario (Domiciliario)', role: 'driver', is_approved: true, balance: 10000, vehicle: 'Moto Honda 125 - XYZ-12A' },
@@ -641,7 +629,34 @@
       }
     });
 
-    // DIRECCIONES GUARDADAS (ESTILO RAPPI)
+    // INICIALIZACIÓN AUTO DE CONEXIÓN FIRESTORE Y TOAST
+    function checkFirebaseStatus() {
+      const banner = document.getElementById('db-status-banner');
+      const text = document.getElementById('db-status-text');
+
+      if (typeof db !== 'undefined' && db !== null && firebaseConfig.apiKey !== "AIzaSyYOUR_API_KEY_HERE") {
+        isFirebaseReady = true;
+        banner.classList.remove('hidden');
+        banner.className = "bg-emerald-950/90 border-b border-emerald-800 px-4 py-1 text-[11px] text-emerald-300 flex items-center justify-between";
+        text.innerHTML = '<i class="fa-solid fa-cloud-check text-emerald-400"></i> ⚡ Base de datos en línea (ubavoy)';
+        
+        showToast('⚡ Base de datos Firestore en línea (ubavoy)');
+        setTimeout(() => banner.classList.add('hidden'), 5000);
+        
+        subscribeFirestoreRealtime();
+      } else {
+        isFirebaseReady = false;
+        banner.classList.remove('hidden');
+        text.innerText = "Modo Demo Local (LocalStorage habilitado para pruebas offline)";
+        renderLocalStateAll();
+      }
+    }
+
+    function dismissBanner() {
+      document.getElementById('db-status-banner').classList.add('hidden');
+    }
+
+    // DIRECCIONES GUARDADAS
     function renderSavedAddressesPills() {
       const container = document.getElementById('saved-addresses-pills');
       if (!container) return;
@@ -660,7 +675,6 @@
         `;
       }).join('');
 
-      // Auto-completar dirección activa en el formulario
       const activeAddr = savedAddresses.find(a => a.id === activeAddressId);
       if (activeAddr) {
         document.getElementById('input-destination').value = activeAddr.address + (activeAddr.detail ? ` (${activeAddr.detail})` : '');
@@ -714,7 +728,7 @@
       showToast('¡Nueva dirección guardada exitosamente!');
     }
 
-    // MAPA LEAFLET CARTO DB DARK CON MAP INVALIDATESIZE INMEDIATO
+    // MAPA LEAFLET CARTO DB DARK
     function initLeafletMapUberStyle() {
       const mapContainer = document.getElementById('map');
       if (!mapContainer || typeof L === 'undefined') return;
@@ -740,7 +754,6 @@
           }
         });
 
-        // FIX DE RENDERIZADO INMEDIATO
         leafletMap.invalidateSize();
         setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 200);
 
@@ -772,30 +785,6 @@
       } else {
         showToast('Navegador no soporta Geolocalización', 'error');
       }
-    }
-
-    // VERIFICAR ESTADO FIREBASE
-    function checkFirebaseStatus() {
-      const banner = document.getElementById('db-status-banner');
-      const text = document.getElementById('db-status-text');
-
-      if (typeof db !== 'undefined' && db !== null && firebaseConfig.apiKey !== "AIzaSyYOUR_API_KEY_HERE") {
-        isFirebaseReady = true;
-        banner.className = "bg-emerald-950/90 border-b border-emerald-800 px-4 py-1 text-[11px] text-emerald-300 flex items-center justify-between";
-        text.innerHTML = '<i class="fa-solid fa-cloud-check text-emerald-400"></i> Conectado en tiempo real a Firebase Firestore';
-        setTimeout(() => banner.classList.add('hidden'), 4000);
-        
-        subscribeFirestoreRealtime();
-      } else {
-        isFirebaseReady = false;
-        banner.classList.remove('hidden');
-        text.innerText = "Modo Demo Local (LocalStorage habilitado para pruebas offline)";
-        renderLocalStateAll();
-      }
-    }
-
-    function dismissBanner() {
-      document.getElementById('db-status-banner').classList.add('hidden');
     }
 
     function registerServiceWorker() {
@@ -892,7 +881,6 @@
       switchTab(role);
     }
 
-    // CAMBIO DE PESTAÑAS Y RE-RENDER INMEDIATO DE MAPA
     function switchTab(tab) {
       currentTab = tab;
       const clientBtn = document.getElementById('tab-client-btn');
@@ -914,7 +902,6 @@
       driverView.classList.toggle('hidden', tab !== 'driver');
       adminView.classList.toggle('hidden', tab !== 'admin');
 
-      // CORRECCIÓN MAPA INMEDIATA AL SELECCIONAR CLIENTE
       if (tab === 'client' && leafletMap) {
         leafletMap.invalidateSize();
         setTimeout(() => leafletMap.invalidateSize(), 200);
@@ -924,7 +911,7 @@
       if (!isFirebaseReady) renderLocalStateAll();
     }
 
-    // CLIENTE: SOLICITAR MANDADO
+    // CLIENTE: CREAR PEDIDO (FIRESTORE SCHEMA: client_phone, task_description, delivery_address, delivery_coords, estimated_price, status, created_at)
     async function handleCreateOrder(e) {
       e.preventDefault();
       const description = document.getElementById('input-description').value.trim();
@@ -939,14 +926,16 @@
 
       const newOrder = {
         id: 'UB-' + Math.floor(100000 + Math.random() * 900000),
-        description,
-        destination,
-        destinationCoords: deliveryCoords,
-        customerPhone: phone,
-        customerName: currentUser.name || 'Cliente',
-        estimatedPrice: price,
+        client_phone: phone,
+        task_description: description,
+        delivery_address: destination,
+        delivery_coords: deliveryCoords,
+        estimated_price: price,
         status: 'pending',
-        createdAt: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        assigned_driver_id: null,
+        driver_phone: null,
+        driver_name: null
       };
 
       try {
@@ -985,8 +974,11 @@
     }
 
     function updateTrackingUI(order) {
-      document.getElementById('track-description').innerText = order.description;
-      document.getElementById('track-price').innerText = '$' + order.estimatedPrice.toLocaleString() + ' COP';
+      const desc = order.task_description || order.description || '---';
+      const price = order.estimated_price || order.estimatedPrice || 0;
+
+      document.getElementById('track-description').innerText = desc;
+      document.getElementById('track-price').innerText = '$' + price.toLocaleString() + ' COP';
 
       const progressBar = document.getElementById('progress-bar');
       const driverCard = document.getElementById('driver-assigned-card');
@@ -1007,13 +999,15 @@
         (order.status === 'assigned' ? lblAssigned : lblTransit).className = 'text-emerald-400 font-bold';
         driverCard.classList.remove('hidden');
         
-        if (order.driverInfo) {
-          document.getElementById('assigned-driver-name').innerText = order.driverInfo.name;
-          document.getElementById('assigned-driver-vehicle').innerText = order.driverInfo.vehicle;
-          const cleanPhone = order.driverInfo.phone.replace(/[^0-9]/g, '');
-          const text = encodeURIComponent(`Hola ${order.driverInfo.name}, soy el cliente del pedido #${order.id} en UbaVoy.`);
-          document.getElementById('btn-whatsapp-driver').href = `https://wa.me/57${cleanPhone}?text=${text}`;
-        }
+        const driverName = order.driver_name || (order.driverInfo ? order.driverInfo.name : 'Domiciliario UbaVoy');
+        const driverPhone = order.driver_phone || (order.driverInfo ? order.driverInfo.phone : '3100000000');
+        const driverVehicle = order.driver_vehicle || (order.driverInfo ? order.driverInfo.vehicle : 'Moto Domicilios');
+
+        document.getElementById('assigned-driver-name').innerText = driverName;
+        document.getElementById('assigned-driver-vehicle').innerText = driverVehicle;
+        const cleanPhone = driverPhone.replace(/[^0-9]/g, '');
+        const text = encodeURIComponent(`Hola ${driverName}, soy el cliente del pedido #${order.id} en UbaVoy.`);
+        document.getElementById('btn-whatsapp-driver').href = `https://wa.me/57${cleanPhone}?text=${text}`;
       } else if (order.status === 'completed') {
         progressBar.style.width = '100%';
         lblCompleted.className = 'text-emerald-400 font-bold';
@@ -1027,7 +1021,7 @@
       document.getElementById('tracking-section').classList.add('hidden');
     }
 
-    // REALTIME LISTENERS FIRESTORE
+    // REALTIME LISTENERS FIRESTORE (PROJECT: ubavoy)
     function subscribeFirestoreRealtime() {
       db.collection('orders')
         .where('status', '==', 'pending')
@@ -1070,11 +1064,11 @@
       renderAdminStats(localOrders);
     }
 
-    // RENDER HISTORIAL CLIENTE CON BOTÓN "REPETIR MANDADO" (1-CLIC)
+    // RENDER HISTORIAL CLIENTE CON BOTÓN "REPETIR MANDADO" (FIRESTORE SCHEMA)
     function renderClientHistory(allOrders) {
       const feed = document.getElementById('client-history-feed');
       const badge = document.getElementById('client-total-orders-badge');
-      const myOrders = allOrders.filter(o => o.customerPhone === currentUser.phone);
+      const myOrders = allOrders.filter(o => (o.client_phone || o.customerPhone) === currentUser.phone);
       badge.innerText = `${myOrders.length} Pedidos`;
 
       if (myOrders.length === 0) {
@@ -1086,56 +1080,56 @@
         return;
       }
 
-      feed.innerHTML = myOrders.map(order => `
-        <div class="glass-card rounded-xl p-3.5 text-xs space-y-2 border border-slate-800 hover:border-slate-700 transition-all">
-          <div class="flex justify-between items-center">
-            <span class="font-mono text-emerald-400 font-bold">#${order.id}</span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
-              order.status === 'pending' ? 'bg-amber-950 text-amber-400 border border-amber-800' :
-              order.status === 'assigned' ? 'bg-blue-950 text-blue-400 border border-blue-800' :
-              'bg-emerald-950 text-emerald-400 border border-emerald-800'
-            }">
-              ${order.status.toUpperCase()}
-            </span>
-          </div>
-          <p class="font-semibold text-slate-200 line-clamp-2">${escapeHtml(order.description)}</p>
-          <div class="flex justify-between text-slate-400 text-[11px] items-center border-t border-slate-800/80 pt-2">
-            <span class="truncate max-w-[170px]"><i class="fa-solid fa-location-dot text-emerald-400"></i> ${escapeHtml(order.destination)}</span>
-            <span class="font-bold text-amber-400">$${order.estimatedPrice.toLocaleString()} COP</span>
-          </div>
+      feed.innerHTML = myOrders.map(order => {
+        const desc = order.task_description || order.description || 'Mandado UbaVoy';
+        const addr = order.delivery_address || order.destination || 'Ubaté';
+        const price = order.estimated_price || order.estimatedPrice || 0;
 
-          <!-- BOTÓN REPETIR MANDADO EN 1-CLIC -->
-          <button onclick="repeatOrder('${order.id}')"
-            class="w-full py-1.5 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-400 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all">
-            <i class="fa-solid fa-rotate-right"></i> Repetir Mandado
-          </button>
-        </div>
-      `).join('');
+        return `
+          <div class="glass-card rounded-xl p-3.5 text-xs space-y-2 border border-slate-800 hover:border-slate-700 transition-all">
+            <div class="flex justify-between items-center">
+              <span class="font-mono text-emerald-400 font-bold">#${order.id}</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                order.status === 'pending' ? 'bg-amber-950 text-amber-400 border border-amber-800' :
+                order.status === 'assigned' ? 'bg-blue-950 text-blue-400 border border-blue-800' :
+                'bg-emerald-950 text-emerald-400 border border-emerald-800'
+              }">
+                ${(order.status || 'pending').toUpperCase()}
+              </span>
+            </div>
+            <p class="font-semibold text-slate-200 line-clamp-2">${escapeHtml(desc)}</p>
+            <div class="flex justify-between text-slate-400 text-[11px] items-center border-t border-slate-800/80 pt-2">
+              <span class="truncate max-w-[170px]"><i class="fa-solid fa-location-dot text-emerald-400"></i> ${escapeHtml(addr)}</span>
+              <span class="font-bold text-amber-400">$${price.toLocaleString()} COP</span>
+            </div>
+
+            <button onclick="repeatOrder('${order.id}')"
+              class="w-full py-1.5 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-400 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all">
+              <i class="fa-solid fa-rotate-right"></i> Repetir Mandado
+            </button>
+          </div>
+        `;
+      }).join('');
     }
 
-    // FUNCIÓN REPETIR MANDADO EN 1-CLIC
+    // FUNCIÓN REPETIR MANDADO
     function repeatOrder(orderId) {
-      let order = null;
-      if (isFirebaseReady) {
-        // Buscar en local u obtener
-        order = localOrders.find(o => o.id === orderId);
-      } else {
-        order = localOrders.find(o => o.id === orderId);
+      let order = localOrders.find(o => o.id === orderId);
+
+      if (order) {
+        document.getElementById('input-description').value = order.task_description || order.description || '';
+        document.getElementById('input-destination').value = order.delivery_address || order.destination || '';
+        document.getElementById('input-price').value = order.estimated_price || order.estimatedPrice || 5000;
+
+        const coords = order.delivery_coords || order.destinationCoords;
+        if (coords) {
+          deliveryCoords = coords;
+          if (leafletMap) leafletMap.setView([deliveryCoords.lat, deliveryCoords.lng], 16);
+        }
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        showToast('🔄 Mandado precargado en el formulario. ¡Presiona Solicitar!');
       }
-
-      if (!order) return;
-
-      document.getElementById('input-description').value = order.description;
-      document.getElementById('input-destination').value = order.destination;
-      document.getElementById('input-price').value = order.estimatedPrice;
-
-      if (order.destinationCoords) {
-        deliveryCoords = order.destinationCoords;
-        if (leafletMap) leafletMap.setView([deliveryCoords.lat, deliveryCoords.lng], 16);
-      }
-
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      showToast('🔄 Mandado precargado en el formulario. ¡Presiona Solicitar!');
     }
 
     // RENDERIZAR FEED DE CARRERAS (DOMICILIARIO)
@@ -1155,19 +1149,21 @@
       }
 
       feed.innerHTML = orders.map(order => {
-        const destLat = order.destinationCoords ? order.destinationCoords.lat : 5.3081;
-        const destLng = order.destinationCoords ? order.destinationCoords.lng : -73.8144;
-        const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`;
+        const coords = order.delivery_coords || order.destinationCoords || { lat: 5.3081, lng: -73.8144 };
+        const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`;
+        const desc = order.task_description || order.description || 'Mandado UbaVoy';
+        const addr = order.delivery_address || order.destination || 'Ubaté';
+        const price = order.estimated_price || order.estimatedPrice || 0;
 
         return `
           <div class="glass-card rounded-2xl p-4 space-y-3 border border-slate-800 hover:border-emerald-500/40 transition-all shadow-lg">
             <div class="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-2">
               <div>
                 <span class="font-mono text-[10px] text-emerald-400 font-bold">#${order.id}</span>
-                <h4 class="font-bold text-xs text-slate-100 leading-snug">${escapeHtml(order.description)}</h4>
+                <h4 class="font-bold text-xs text-slate-100 leading-snug">${escapeHtml(desc)}</h4>
               </div>
               <div class="text-right">
-                <span class="text-xs font-extrabold text-emerald-400 block">$${order.estimatedPrice.toLocaleString()} COP</span>
+                <span class="text-xs font-extrabold text-emerald-400 block">$${price.toLocaleString()} COP</span>
               </div>
             </div>
 
@@ -1175,7 +1171,7 @@
               <div class="flex items-center gap-1.5 truncate">
                 <i class="fa-solid fa-location-dot text-emerald-400 text-xs"></i>
                 <span class="font-semibold text-slate-400">Entrega:</span>
-                <span class="truncate">${escapeHtml(order.destination)}</span>
+                <span class="truncate">${escapeHtml(addr)}</span>
               </div>
             </div>
 
@@ -1199,7 +1195,7 @@
       }).join('');
     }
 
-    // ACEPTAR CARRERA
+    // ACEPTAR CARRERA (FIRESTORE SCHEMA: status, assigned_driver_id, driver_phone, driver_name)
     async function acceptOrder(orderId) {
       if (currentUser.is_approved === false) {
         showToast('⚠️ Tu cuenta no ha sido aprobada por el Administrador.', 'error');
@@ -1219,13 +1215,11 @@
 
       const updateData = {
         status: 'assigned',
-        driverInfo: {
-          id: currentUser.phone,
-          name: currentUser.name || 'Domiciliario UbaVoy',
-          phone: currentUser.phone,
-          vehicle: currentUser.vehicle || 'Moto Domicilios'
-        },
-        assignedAt: new Date().toISOString()
+        assigned_driver_id: currentUser.phone,
+        driver_phone: currentUser.phone,
+        driver_name: currentUser.name || 'Domiciliario UbaVoy',
+        driver_vehicle: currentUser.vehicle || 'Moto Domicilios',
+        assigned_at: new Date().toISOString()
       };
 
       try {
@@ -1246,10 +1240,10 @@
         let customerPhone = '';
         if (isFirebaseReady) {
           const doc = await db.collection('orders').doc(orderId).get();
-          if (doc.exists) customerPhone = doc.data().customerPhone;
+          if (doc.exists) customerPhone = doc.data().client_phone || doc.data().customerPhone;
         } else {
           const ord = localOrders.find(o => o.id === orderId);
-          if (ord) customerPhone = ord.customerPhone;
+          if (ord) customerPhone = ord.client_phone || ord.customerPhone;
         }
 
         if (customerPhone) {
@@ -1261,7 +1255,7 @@
       }
     }
 
-    // PANEL ADMINISTRADOR
+    // PANEL ADMINISTRADOR (`users` SCHEMA: phone, role, name, balance, is_approved)
     async function renderAdminDriversList() {
       const feed = document.getElementById('admin-drivers-feed');
       

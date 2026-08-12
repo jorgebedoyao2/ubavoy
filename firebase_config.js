@@ -1,17 +1,16 @@
 /**
- * UbaVoy - Configuración de Firebase Firestore & Utilidades de Sonido y Geolocalización
+ * UbaVoy - Configuración Oficial de Firebase Firestore (Proyecto: ubavoy)
  * 
  * INSTRUCCIONES:
- * Reemplaza el objeto `firebaseConfig` a continuación con las credenciales
- * obtenidas desde la Consola de Firebase.
- * URL: https://console.firebase.google.com/
+ * Reemplaza la variable `firebaseConfig` con las llaves completas de tu consola Firebase.
+ * URL: https://console.firebase.google.com/project/ubavoy/overview
  */
 
 const firebaseConfig = {
   apiKey: "AIzaSyYOUR_API_KEY_HERE",
-  authDomain: "ubavoy-app.firebaseapp.com",
-  projectId: "ubavoy-app",
-  storageBucket: "ubavoy-app.appspot.com",
+  authDomain: "ubavoy.firebaseapp.com",
+  projectId: "ubavoy",
+  storageBucket: "ubavoy.appspot.com",
   messagingSenderId: "123456789012",
   appId: "1:123456789012:web:abcdef123456"
 };
@@ -30,7 +29,7 @@ try {
   if (typeof firebase !== 'undefined') {
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
-      console.log("⚡ [UbaVoy] Firebase inicializado correctamente.");
+      console.log("⚡ [UbaVoy] Firebase (ubavoy) inicializado correctamente.");
     }
     db = firebase.firestore();
     
@@ -59,7 +58,6 @@ function playNewOrderSound() {
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
 
-    // Primer tono (Agudo)
     const osc1 = ctx.createOscillator();
     const gain1 = ctx.createGain();
     osc1.type = 'sine';
@@ -71,7 +69,6 @@ function playNewOrderSound() {
     osc1.start(ctx.currentTime);
     osc1.stop(ctx.currentTime + 0.3);
 
-    // Segundo tono (Más agudo - 0.15s después)
     setTimeout(() => {
       const osc2 = ctx.createOscillator();
       const gain2 = ctx.createGain();
