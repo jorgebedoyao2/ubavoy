@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
-import os
 
 # Adaptador para Vercel Serverless
 try:
@@ -14,12 +13,12 @@ except ImportError:
 app = FastAPI(
     title="UbaVoy API",
     description="Backend Serverless para la plataforma de domicilios y mandados UbaVoy (Ubaté, Cundinamarca)",
-    version="1.0.0",
+    version="3.0.0",
     docs_url="/api/docs",
     openapi_url="/api/openapi.json"
 )
 
-# Configuración de CORS para permitir solicitudes del Frontend
+# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -30,10 +29,10 @@ app.add_middleware(
 
 # Modelos Pydantic
 class RechargeRequest(BaseModel):
-    driverId: str = Field(..., description="ID o teléfono del domiciliario")
+    driverId: str = Field(..., description="ID o celular del domiciliario")
     driverName: Optional[str] = Field("Domiciliario UbaVoy", description="Nombre del domiciliario")
-    amount: float = Field(..., gt=0, description="Monto en COP a recargar (ej. 5000, 10000)")
-    paymentRef: Optional[str] = Field(None, description="Número de referencia Nequi/Daviplata")
+    amount: float = Field(..., gt=0, description="Monto en COP a recargar")
+    paymentRef: Optional[str] = Field(None, description="Número de referencia Nequi")
 
 class RechargeResponse(BaseModel):
     status: str
@@ -48,6 +47,7 @@ class HealthResponse(BaseModel):
     status: str
     app: str
     city: str
+    coordinates: dict
     commissionPerOrderCOP: int
     timestamp: str
 
@@ -57,18 +57,16 @@ def health_check():
     """Endpoint de diagnóstico de salud del servidor Backend"""
     return HealthResponse(
         status="ok",
-        app="UbaVoy API Serverless",
+        app="UbaVoy API Serverless v3.0",
         city="Ubaté, Cundinamarca",
+        coordinates={"lat": 5.3081, "lng": -73.8144},
         commissionPerOrderCOP=500,
         timestamp=datetime.utcnow().isoformat() + "Z"
     )
 
 @app.post("/api/drivers/recharge", response_model=RechargeResponse, status_code=status.HTTP_200_OK)
 def recharge_driver_balance(payload: RechargeRequest):
-    """
-    Endpoint para gestionar la recarga de saldo de un domiciliario.
-    En UbaVoy, cada carrera aceptada descuenta $500 COP del saldo del domiciliario.
-    """
+    """Endpoint para recarga de saldo prepago de domiciliarios"""
     if payload.amount < 1000:
         raise HTTPException(
             status_code=400, 
@@ -76,8 +74,7 @@ def recharge_driver_balance(payload: RechargeRequest):
         )
 
     ref = payload.paymentRef or f"UB-NQ-{int(datetime.utcnow().timestamp())}"
-    # Simulación de cálculo de saldo acumulado (o integración directa con base de datos)
-    simulated_new_balance = 10000.0 + payload.amount  # Saldo base sugerido + recarga
+    simulated_new_balance = 10000.0 + payload.amount
 
     return RechargeResponse(
         status="success",
@@ -91,11 +88,12 @@ def recharge_driver_balance(payload: RechargeRequest):
 
 @app.get("/api/info")
 def platform_info():
-    """Información general sobre tarifas y comisiones de UbaVoy"""
+    """Información general sobre UbaVoy"""
     return {
         "platform": "UbaVoy Ubaté",
-        "version": "1.0.0",
-        "description": "Plataforma exprés de domicilios y mandados para Ubaté, Cundinamarca",
+        "version": "3.0.0",
+        "city": "Ubaté, Cundinamarca",
+        "centerCoordinates": {"lat": 5.3081, "lng": -73.8144},
         "driverCommissionCOP": 500,
         "nequiNumber": "3100000000",
         "supportWhatsApp": "573100000000",
