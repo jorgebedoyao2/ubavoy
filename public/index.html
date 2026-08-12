@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>UbaVoy - Domicilios, Mandados & Mapas Ubaté</title>
+  <title>UbaVoy - Domicilios y Mandados Exprés Ubaté</title>
   
   <!-- PWA Metadata & Theme -->
   <link rel="manifest" href="/manifest.json">
@@ -22,7 +22,7 @@
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <!-- Leaflet.js Maps CSS & JS (100% GRATIS) -->
+  <!-- Leaflet.js Maps CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -73,16 +73,16 @@
       font-family: 'Inter', sans-serif;
     }
     .glass-card {
-      background: rgba(15, 23, 42, 0.75);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-    .glass-header {
-      background: rgba(2, 44, 34, 0.88);
+      background: rgba(15, 23, 42, 0.85);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    .glass-header {
+      background: rgba(2, 44, 34, 0.92);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-bottom: 1px solid rgba(16, 185, 129, 0.25);
     }
     .pulse-badge {
       box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
@@ -93,10 +93,17 @@
       70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
       100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
     }
-    /* Estilos personalizados para Leaflet en Modo Oscuro */
-    .leaflet-tile {
-      filter: brightness(0.85) contrast(1.1) saturate(0.9);
+    /* Estilo de animación de rebote tipo Uber Pin */
+    .bounce-pin {
+      animation: uberBounce 0.4s ease-out;
     }
+    @keyframes uberBounce {
+      0% { transform: translateY(-12px); }
+      50% { transform: translateY(0); }
+      75% { transform: translateY(-4px); }
+      100% { transform: translateY(0); }
+    }
+    /* BALDOSAS CARTO DB DARK MATTER */
     .leaflet-container {
       background: #090d16 !important;
       font-family: 'Inter', sans-serif;
@@ -114,7 +121,7 @@
       <!-- Top Row: Logo + Active User Profile Pill -->
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center shadow-lg shadow-brand-600/30">
+          <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center shadow-lg shadow-brand-600/40">
             <i class="fa-solid fa-bolt text-slate-950 text-base"></i>
           </div>
           <div>
@@ -126,7 +133,7 @@
         </div>
 
         <!-- PERFIL ACTIVO & LOGIN BADGE -->
-        <button onclick="openAuthModal()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl px-2.5 py-1.5 flex items-center gap-2 transition-all">
+        <button onclick="openAuthModal()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl px-2.5 py-1.5 flex items-center gap-2 transition-all shadow-md">
           <div class="w-6 h-6 rounded-full bg-brand-600/30 border border-brand-500/50 flex items-center justify-center text-brand-400 text-xs font-bold">
             <i id="user-role-icon" class="fa-solid fa-user"></i>
           </div>
@@ -139,14 +146,14 @@
       </div>
 
       <!-- SWITCH DE PESTAÑAS Y ROLES: CLIENTE | DOMICILIARIO | ADMIN -->
-      <div class="bg-slate-900/90 p-1 rounded-xl border border-slate-800 flex text-xs">
-        <button id="tab-client-btn" onclick="switchTab('client')" class="flex-1 py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 bg-brand-600 text-white shadow-md">
+      <div class="bg-slate-900/90 p-1 rounded-xl border border-slate-800 flex text-xs shadow-inner">
+        <button id="tab-client-btn" onclick="switchTab('client')" class="flex-1 py-2 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20">
           <i class="fa-solid fa-bag-shopping"></i> Cliente
         </button>
-        <button id="tab-driver-btn" onclick="switchTab('driver')" class="flex-1 py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200">
+        <button id="tab-driver-btn" onclick="switchTab('driver')" class="flex-1 py-2 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200">
           <i class="fa-solid fa-motorcycle"></i> Domiciliario
         </button>
-        <button id="tab-admin-btn" onclick="switchTab('admin')" class="flex-1 py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200">
+        <button id="tab-admin-btn" onclick="switchTab('admin')" class="flex-1 py-2 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200">
           <i class="fa-solid fa-user-shield"></i> Admin
         </button>
       </div>
@@ -165,86 +172,100 @@
     <main class="flex-1 px-4 py-4 space-y-5">
 
       <!-- ======================================================= -->
-      <!-- VISTA 1: PANEL CLIENTE CON MAPA INTERACTIVO LEAFLET.JS -->
+      <!-- VISTA 1: PANEL CLIENTE (SIMPLIFICADO ESTILO UBER EATS) -->
       <!-- ======================================================= -->
       <section id="view-client" class="space-y-5">
         
-        <!-- Formulario Crear Mandado -->
-        <div class="glass-card rounded-2xl p-5 space-y-4 relative overflow-hidden">
+        <!-- Formulario Crear Mandado Simplificado -->
+        <div class="glass-card rounded-2xl p-5 space-y-4 relative overflow-hidden shadow-xl shadow-slate-950/50">
           <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
             <h2 class="font-display font-bold text-base text-white flex items-center gap-2">
-              <i class="fa-solid fa-map-location-dot text-brand-400"></i> Pedir Mandado Exprés
+              <i class="fa-solid fa-paper-plane text-emerald-400"></i> Pedir Mandado Exprés
             </h2>
-            <span id="client-total-orders-badge" class="text-[10px] font-bold text-brand-400 bg-brand-950 px-2 py-0.5 rounded-full border border-brand-800">
+            <span id="client-total-orders-badge" class="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-800">
               0 Pedidos
             </span>
           </div>
 
-          <form id="order-form" onsubmit="handleCreateOrder(event)" class="space-y-3">
+          <form id="order-form" onsubmit="handleCreateOrder(event)" class="space-y-4">
+            
+            <!-- Campo 1: ¿Qué necesitas? (TEXTAREA GRANDE) -->
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">
+              <label class="block text-xs font-semibold text-slate-200 mb-1.5">
                 ¿Qué necesitas que llevemos o compremos? <span class="text-rose-400">*</span>
               </label>
-              <textarea id="input-description" required rows="2" 
-                placeholder="Ej: Comprar 1 medicina en droguería La Rebaja o recoger llaves en el centro..."
-                class="w-full bg-slate-900/90 border border-slate-700/80 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 outline-none transition-all resize-none"></textarea>
+              <textarea id="input-description" required rows="3" 
+                placeholder="Ej: Traer un paquete de la plaza principal, comprar medicamentos en la droguería del centro..."
+                class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 outline-none transition-all resize-none shadow-inner"></textarea>
             </div>
 
-            <!-- SECCIÓN DEL MAPA INTERACTIVO (LEAFLET.JS) -->
-            <div class="space-y-1.5">
+            <!-- Campo 2: Dirección / Lugar de Entrega (UN SOLO CAMPO) -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-200 mb-1.5">
+                Dirección / Lugar de Entrega <span class="text-rose-400">*</span>
+              </label>
+              <div class="relative">
+                <i class="fa-solid fa-location-dot absolute left-3.5 top-3 text-emerald-400 text-sm"></i>
+                <input type="text" id="input-destination" required placeholder="Ej: Barrio Santa Bárbara, frente a la tienda X"
+                  class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 outline-none transition-all">
+              </div>
+            </div>
+
+            <!-- MAPA TIPO UBER EATS (PIN CENTRAL FIJO + BALDOSAS CARTO DB DARK) -->
+            <div class="space-y-2 pt-1">
               <div class="flex items-center justify-between">
-                <label class="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <i class="fa-solid fa-compass text-brand-400"></i> Selecciona Puntos en el Mapa
+                <label class="block text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <i class="fa-solid fa-map text-emerald-400"></i> Confirma la ubicación en el Mapa
                 </label>
-                <!-- Botón Geolocalización actual -->
-                <button type="button" onclick="useCurrentLocation()" class="text-[11px] font-bold text-emerald-400 bg-emerald-950/80 hover:bg-emerald-900 px-2.5 py-1 rounded-lg border border-emerald-800 flex items-center gap-1 transition-all">
-                  <i class="fa-solid fa-location-crosshairs"></i> Mi Ubicación
+              </div>
+
+              <!-- CONTENEDOR DE MAPA CON PIN CENTRAL Y BOTÓN FLOTANTE -->
+              <div class="relative w-full rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl">
+                
+                <!-- MAPA LEAFLET CONTAINER -->
+                <div id="map" class="h-52 w-full z-0 bg-slate-900"></div>
+
+                <!-- PIN FIJO CENTRAL TIPO UBER CON SOMBRA Y BOUNCE ANIMATION -->
+                <div class="absolute inset-0 pointer-events-none z-10 flex items-center justify-center -mt-6">
+                  <div id="uber-center-pin" class="flex flex-col items-center justify-center">
+                    <div class="w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow-xl shadow-emerald-500/50 border-2 border-white">
+                      <i class="fa-solid fa-location-dot"></i>
+                    </div>
+                    <div class="w-2.5 h-1 bg-black/60 rounded-full blur-[1px] mt-0.5"></div>
+                  </div>
+                </div>
+
+                <!-- BOTÓN FLOTANTE SOBRE EL MAPA: FIJAR MI UBICACIÓN -->
+                <button type="button" onclick="useCurrentLocation()"
+                  class="absolute bottom-3 right-3 z-20 bg-slate-900/90 hover:bg-slate-800 text-emerald-400 border border-emerald-500/40 font-bold text-[11px] px-3 py-1.5 rounded-xl shadow-xl backdrop-blur-md flex items-center gap-1.5 transition-all active:scale-95">
+                  <span>🎯 Fijar mi Ubicación Actual</span>
                 </button>
               </div>
-
-              <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> Pin Verde: Recogida (A)</span>
-                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Pin Rojo: Entrega (B)</span>
-              </div>
-
-              <!-- MAP CONTAINER -->
-              <div id="map" class="h-52 w-full rounded-2xl border border-slate-700 shadow-inner my-2 z-0"></div>
+              <p class="text-[10px] text-slate-400 text-center">Mueve el mapa para ajustar el punto exacto de entrega</p>
             </div>
 
-            <!-- Punto A (Origen Address Input) -->
-            <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Punto A: Recoger / Origen</label>
-              <div class="relative">
-                <i class="fa-solid fa-circle-dot absolute left-3 top-2.5 text-emerald-400 text-xs"></i>
-                <input type="text" id="input-origin" required placeholder="Ej: Carrera 7 #8-15, Centro Ubaté"
-                  class="w-full bg-slate-900/90 border border-slate-700/80 focus:border-brand-500 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-100 outline-none">
-              </div>
-            </div>
-
-            <!-- Punto B (Destino Address Input) -->
-            <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Punto B: Entregar / Destino</label>
-              <div class="relative">
-                <i class="fa-solid fa-location-pin absolute left-3 top-2.5 text-rose-500 text-xs"></i>
-                <input type="text" id="input-destination" required placeholder="Ej: Calle 10 #4-32, Barrio San José"
-                  class="w-full bg-slate-900/90 border border-slate-700/80 focus:border-brand-500 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-100 outline-none">
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
+            <!-- WhatsApp & Pago Estimado -->
+            <div class="grid grid-cols-2 gap-3 pt-1">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Tu WhatsApp</label>
-                <input type="tel" id="input-phone" required placeholder="3101234567"
-                  class="w-full bg-slate-900/90 border border-slate-700/80 focus:border-brand-500 rounded-xl px-3 py-2 text-xs text-slate-100 outline-none">
+                <label class="block text-xs font-semibold text-slate-200 mb-1">Tu WhatsApp</label>
+                <div class="relative">
+                  <i class="fa-brands fa-whatsapp absolute left-3 top-2.5 text-emerald-400 text-xs"></i>
+                  <input type="tel" id="input-phone" required placeholder="3101234567"
+                    class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-100 outline-none">
+                </div>
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Pago Domicilio (COP)</label>
-                <input type="number" id="input-price" min="3000" step="500" value="5000" required
-                  class="w-full bg-slate-900/90 border border-slate-700/80 focus:border-brand-500 rounded-xl px-3 py-2 text-xs font-bold text-slate-100 outline-none">
+                <label class="block text-xs font-semibold text-slate-200 mb-1">Pago Domicilio (COP)</label>
+                <div class="relative">
+                  <span class="absolute left-3 top-2 text-slate-400 text-xs font-bold">$</span>
+                  <input type="number" id="input-price" min="3000" step="500" value="5000" required
+                    class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 rounded-xl pl-7 pr-3 py-2 text-xs font-bold text-slate-100 outline-none">
+                </div>
               </div>
             </div>
 
-            <button type="submit" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-brand-600 via-brand-500 to-emerald-500 hover:from-brand-500 hover:to-emerald-400 text-slate-950 font-display font-extrabold text-sm tracking-wide shadow-lg shadow-brand-600/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+            <!-- Botón Principal Neón Esmeralda -->
+            <button type="submit" class="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-extrabold text-sm tracking-wide shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
               <span>Solicitar Domiciliario Ahora</span>
               <i class="fa-solid fa-arrow-right"></i>
             </button>
@@ -263,16 +284,16 @@
             </button>
           </div>
 
-          <div class="glass-card rounded-2xl p-4 border border-brand-500/30 space-y-3">
+          <div class="glass-card rounded-2xl p-4 border border-emerald-500/30 space-y-3 shadow-xl">
             <div class="space-y-1.5">
               <div class="flex justify-between text-[11px] font-semibold" id="status-steps-labels">
-                <span id="step-lbl-pending" class="text-brand-400">Buscando</span>
+                <span id="step-lbl-pending" class="text-emerald-400">Buscando</span>
                 <span id="step-lbl-assigned" class="text-slate-500">Asignado</span>
                 <span id="step-lbl-transit" class="text-slate-500">En Camino</span>
                 <span id="step-lbl-completed" class="text-slate-500">Entregado</span>
               </div>
               <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div id="progress-bar" class="h-full bg-gradient-to-r from-brand-500 to-emerald-400 w-1/4 transition-all duration-500"></div>
+                <div id="progress-bar" class="h-full bg-emerald-500 w-1/4 transition-all duration-500"></div>
               </div>
             </div>
 
@@ -288,9 +309,9 @@
             </div>
 
             <!-- Tarjeta Domiciliario Asignado -->
-            <div id="driver-assigned-card" class="hidden bg-slate-900 border border-brand-500/40 rounded-xl p-3 space-y-2">
+            <div id="driver-assigned-card" class="hidden bg-slate-900 border border-emerald-500/40 rounded-xl p-3 space-y-2">
               <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full bg-brand-600/20 border border-brand-500/40 flex items-center justify-center text-brand-400 text-lg font-bold">
+                <div class="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-lg font-bold">
                   <i class="fa-solid fa-helmet-safety"></i>
                 </div>
                 <div class="flex-1 min-w-0">
@@ -308,10 +329,10 @@
           </div>
         </div>
 
-        <!-- HISTORIAL DE MANDADOS SOLICITADOS POR EL CLIENTE -->
+        <!-- HISTORIAL DE MANDADOS SOLICITADOS -->
         <div class="space-y-3">
           <h3 class="font-display font-bold text-sm text-white flex items-center gap-2 px-1">
-            <i class="fa-solid fa-clock-rotate-left text-brand-400"></i> Historial de Mandados
+            <i class="fa-solid fa-clock-rotate-left text-emerald-400"></i> Historial de Mandados
           </h3>
           <div id="client-history-feed" class="space-y-2.5">
             <div class="glass-card rounded-xl p-4 text-center text-xs text-slate-400">
@@ -328,7 +349,7 @@
       <section id="view-driver" class="hidden space-y-5">
         
         <!-- Header Domiciliario: Saldo & Estado de Aprobación -->
-        <div class="glass-card rounded-2xl p-5 border border-slate-800 space-y-4">
+        <div class="glass-card rounded-2xl p-5 border border-slate-800 space-y-4 shadow-xl">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-xs font-semibold text-slate-400">Saldo Disponible Domiciliario</p>
@@ -352,9 +373,9 @@
         </div>
 
         <!-- ALERTA SONORA BANNER -->
-        <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-300 flex items-center justify-between">
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-300 flex items-center justify-between shadow-md">
           <span class="flex items-center gap-2">
-            <i class="fa-solid fa-volume-high text-brand-400"></i> Alerta Sonora Activada
+            <i class="fa-solid fa-volume-high text-emerald-400"></i> Alerta Sonora Activada
           </span>
           <button onclick="playNewOrderSound()" class="text-[11px] bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded text-slate-300">
             Probar Sonido <i class="fa-solid fa-music"></i>
@@ -365,9 +386,9 @@
         <div class="space-y-3">
           <div class="flex items-center justify-between px-1">
             <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
-              <i class="fa-solid fa-list-check text-brand-400"></i> Carreras Libres en Ubaté
+              <i class="fa-solid fa-list-check text-emerald-400"></i> Carreras Libres en Ubaté
             </h3>
-            <span id="available-count-badge" class="text-xs font-bold text-brand-400 bg-brand-950 px-2.5 py-0.5 rounded-full border border-brand-800">
+            <span id="available-count-badge" class="text-xs font-bold text-emerald-400 bg-emerald-950 px-2.5 py-0.5 rounded-full border border-emerald-800">
               0 Libres
             </span>
           </div>
@@ -388,7 +409,7 @@
       <section id="view-admin" class="hidden space-y-5">
         
         <!-- Header Administrador -->
-        <div class="glass-card rounded-2xl p-5 border border-purple-500/30 space-y-3">
+        <div class="glass-card rounded-2xl p-5 border border-purple-500/30 space-y-3 shadow-xl">
           <div class="flex items-center justify-between">
             <h2 class="font-display font-bold text-base text-white flex items-center gap-2">
               <i class="fa-solid fa-user-shield text-purple-400"></i> Panel de Administración UbaVoy
@@ -441,7 +462,7 @@
       <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-slate-700 shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3">
           <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
-            <i class="fa-solid fa-user-gear text-brand-400"></i> Mi Perfil y Rol UbaVoy
+            <i class="fa-solid fa-user-gear text-emerald-400"></i> Mi Perfil y Rol UbaVoy
           </h3>
           <button onclick="closeAuthModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
         </div>
@@ -450,18 +471,18 @@
           <div>
             <label class="block font-semibold text-slate-300 mb-1">Nombre Completo</label>
             <input type="text" id="auth-name" required placeholder="Ej: Carlos Gómez"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-semibold outline-none focus:border-brand-500">
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-semibold outline-none focus:border-emerald-500">
           </div>
 
           <div>
             <label class="block font-semibold text-slate-300 mb-1">Número WhatsApp (+57)</label>
             <input type="tel" id="auth-phone" required placeholder="3101234567"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-semibold outline-none focus:border-brand-500">
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-semibold outline-none focus:border-emerald-500">
           </div>
 
           <div>
             <label class="block font-semibold text-slate-300 mb-1">Seleccionar Rol Principal</label>
-            <select id="auth-role" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-bold outline-none focus:border-brand-500">
+            <select id="auth-role" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-bold outline-none focus:border-emerald-500">
               <option value="client">🛍️ Cliente (Solicitar Domicilios)</option>
               <option value="driver">🛵 Domiciliario (Aceptar Carreras)</option>
               <option value="admin">👑 Administrador (Aprobar y Recargar)</option>
@@ -471,10 +492,10 @@
           <div id="driver-vehicle-field" class="space-y-1">
             <label class="block font-semibold text-slate-300 mb-1">Vehículo / Placa (Solo Domiciliarios)</label>
             <input type="text" id="auth-vehicle" placeholder="Moto Yamaha FZ 150 - ABC-12D"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-brand-500">
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500">
           </div>
 
-          <button type="submit" class="w-full py-3 px-4 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md">
+          <button type="submit" class="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md">
             <i class="fa-solid fa-check"></i> Guardar e Iniciar Sesión
           </button>
         </form>
@@ -504,7 +525,7 @@
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-bold outline-none">
             </div>
 
-            <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs flex items-center justify-center gap-2">
+            <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2">
               <i class="fa-solid fa-check"></i> Solicitar Recarga
             </button>
           </form>
@@ -513,30 +534,26 @@
     </div>
 
     <!-- TOAST NOTIFICACIONES -->
-    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-brand-500/40 shadow-xl flex items-center gap-3">
-      <i id="toast-icon" class="fa-solid fa-circle-check text-brand-400 text-base"></i>
+    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-emerald-500/40 shadow-xl flex items-center gap-3">
+      <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
       <span id="toast-message" class="flex-1">Operación exitosa</span>
     </div>
 
   </div>
 
-  <!-- JAVASCRIPT LOGIC (LEAFLET MAPS + GOOGLE MAPS GPS + AUTH & FIRESTORE) -->
+  <!-- JAVASCRIPT LOGIC (CARTO DB DARK MAP + UBER CENTER PIN + FIRESTORE) -->
   <script>
-    // ESTADO GLOBAL & CONFIGURACIÓN UBATÉ
+    // ESTADO GLOBAL
     let currentTab = 'client';
     let isFirebaseReady = false;
     let previousPendingCount = 0;
     let activeTrackOrderId = localStorage.getItem('ubavoy_active_order_id') || null;
 
-    // MAPA INTERACTIVO & MARCADORES LEAFLET.JS
+    // MAPA LEAFLET CARTO DB DARK & COORDENADAS DE ENTREGA
     let leafletMap = null;
-    let markerOrigin = null;      // Pin Verde (Punto A)
-    let markerDestination = null; // Pin Rojo (Punto B)
+    let deliveryCoords = { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
 
-    let currentOriginCoords = { lat: 5.3081, lng: -73.8144 };
-    let currentDestinationCoords = { lat: 5.3120, lng: -73.8120 };
-
-    // USUARIO ACTUAL LOGUEADO
+    // USUARIO LOGUEADO
     let currentUser = JSON.parse(localStorage.getItem('ubavoy_current_user') || JSON.stringify({
       phone: '3101234567',
       name: 'Usuario UbaVoy',
@@ -546,7 +563,7 @@
       vehicle: 'Moto Yamaha FZ 150 - ABC-12D'
     }));
 
-    // BASE DE DATOS LOCAL BACKUP (DEMO OFFLINE)
+    // LOCAL STORAGE DEMO BACKUP
     let localUsers = JSON.parse(localStorage.getItem('ubavoy_local_users') || JSON.stringify([
       currentUser,
       { phone: '3109876543', name: 'Carlos Mario (Domiciliario)', role: 'driver', is_approved: true, balance: 10000, vehicle: 'Moto Honda 125 - XYZ-12A' },
@@ -558,101 +575,70 @@
       updateHeaderUserUI();
       checkFirebaseStatus();
       registerServiceWorker();
-      initLeafletMap();
+      initLeafletMapUberStyle();
 
       if (activeTrackOrderId) {
         startOrderTracking(activeTrackOrderId);
       }
     });
 
-    // INICIALIZACIÓN DEL MAPA LEAFLET.JS CENTRADO EN UBATÉ
-    function initLeafletMap() {
+    // INICIALIZAR MAPA CARTO DB DARK MATTER CON PIN CENTRAL FIJO TIPO UBER EATS
+    function initLeafletMapUberStyle() {
       const mapContainer = document.getElementById('map');
       if (!mapContainer || typeof L === 'undefined') return;
 
       try {
-        // Inicializar mapa en Ubaté
-        leafletMap = L.map('map', { zoomControl: true }).setView([UBATE_CENTER.lat, UBATE_CENTER.lng], UBATE_CENTER.zoom);
+        // Inicializar mapa centrado en Ubaté
+        leafletMap = L.map('map', { zoomControl: false }).setView([UBATE_CENTER.lat, UBATE_CENTER.lng], UBATE_CENTER.zoom);
 
-        // Capa de Mapa OpenStreetMap (GRATIS)
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        // BALDOSAS CARTO DB DARK MATTER (Estilo Uber/Glovo Oscuro Impecable)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
           maxZoom: 19,
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          subdomains: 'abcd',
+          attribution: '&copy; CartoDB &copy; OpenStreetMap'
         }).addTo(leafletMap);
 
-        // Icono Pin Verde (Origen / Recogida)
-        const greenIcon = L.divIcon({
-          className: 'custom-pin-green',
-          html: `<div style="background-color: #10b981; width: 28px; height: 28px; border-radius: 50%; border: 3px solid #ffffff; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; color: #000; font-weight: bold; font-size: 12px;"><i class="fa-solid fa-store"></i></div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14]
+        // CAPTURAR COORDENADAS DEL CENTRO AL MOVER EL MAPA
+        leafletMap.on('moveend', () => {
+          const center = leafletMap.getCenter();
+          deliveryCoords = { lat: center.lat, lng: center.lng };
+          
+          // Animación Bounce en Pin Central
+          const pin = document.getElementById('uber-center-pin');
+          if (pin) {
+            pin.classList.remove('bounce-pin');
+            void pin.offsetWidth; // Force Reflow
+            pin.classList.add('bounce-pin');
+          }
         });
 
-        // Icono Pin Rojo (Destino / Entrega)
-        const redIcon = L.divIcon({
-          className: 'custom-pin-red',
-          html: `<div style="background-color: #f43f5e; width: 28px; height: 28px; border-radius: 50%; border: 3px solid #ffffff; box-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 12px;"><i class="fa-solid fa-house"></i></div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14]
-        });
-
-        // Crear Marcadores Arrastrables (Draggable Pins)
-        markerOrigin = L.marker([currentOriginCoords.lat, currentOriginCoords.lng], {
-          draggable: true,
-          icon: greenIcon,
-          title: "Punto A - Recogida"
-        }).addTo(leafletMap);
-
-        markerDestination = L.marker([currentDestinationCoords.lat, currentDestinationCoords.lng], {
-          draggable: true,
-          icon: redIcon,
-          title: "Punto B - Entrega"
-        }).addTo(leafletMap);
-
-        // Popups explicativos
-        markerOrigin.bindPopup("<b>Punto A</b>: Recogida").openPopup();
-        markerDestination.bindPopup("<b>Punto B</b>: Entrega");
-
-        // Eventos Arrastrar Marcadores
-        markerOrigin.on('dragend', function (e) {
-          const latlng = e.target.getLatLng();
-          currentOriginCoords = { lat: latlng.lat, lng: latlng.lng };
-          document.getElementById('input-origin').value = `Ubaté (Lat: ${latlng.lat.toFixed(4)}, Lng: ${latlng.lng.toFixed(4)})`;
-        });
-
-        markerDestination.on('dragend', function (e) {
-          const latlng = e.target.getLatLng();
-          currentDestinationCoords = { lat: latlng.lat, lng: latlng.lng };
-          document.getElementById('input-destination').value = `Ubaté (Lat: ${latlng.lat.toFixed(4)}, Lng: ${latlng.lng.toFixed(4)})`;
-        });
-
-        // Forzar ajuste de renderizado
-        setTimeout(() => leafletMap.invalidateSize(), 500);
+        // SOLUCIÓN AL MAPA GRIS: InvalidateSize con retraso
+        setTimeout(() => {
+          if (leafletMap) leafletMap.invalidateSize();
+        }, 300);
 
       } catch (err) {
         console.warn("Error al inicializar mapa Leaflet:", err);
       }
     }
 
-    // USAR UBICACIÓN ACTUAL DEL CLIENTE (GEOLOCATION API)
+    // BOTÓN FLOTANTE: FIJAR MI UBICACIÓN ACTUAL
     function useCurrentLocation() {
       if ('geolocation' in navigator) {
         showToast('Obteniendo ubicación GPS actual...');
         navigator.geolocation.getCurrentPosition(
           (position) => {
             const { latitude, longitude } = position.coords;
-            currentOriginCoords = { lat: latitude, lng: longitude };
+            deliveryCoords = { lat: latitude, lng: longitude };
 
-            if (leafletMap && markerOrigin) {
-              markerOrigin.setLatLng([latitude, longitude]);
+            if (leafletMap) {
               leafletMap.setView([latitude, longitude], 16);
+              setTimeout(() => leafletMap.invalidateSize(), 200);
             }
 
-            document.getElementById('input-origin').value = `Mi Ubicación Actual (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`;
-            showToast('📍 Punto de recogida actualizado a tu ubicación GPS');
+            showToast('🎯 Mapa centrado en tu ubicación GPS');
           },
           (error) => {
-            console.warn("Error geolocalización:", error);
             showToast('No se pudo acceder a la ubicación GPS', 'error');
           },
           { enableHighAccuracy: true, timeout: 10000 }
@@ -709,8 +695,8 @@
         icon.className = 'fa-solid fa-motorcycle text-amber-400';
       } else {
         roleLbl.innerText = 'Cliente';
-        roleLbl.className = 'text-[9px] font-semibold text-brand-400 uppercase tracking-wider';
-        icon.className = 'fa-solid fa-user text-brand-400';
+        roleLbl.className = 'text-[9px] font-semibold text-emerald-400 uppercase tracking-wider';
+        icon.className = 'fa-solid fa-user text-emerald-400';
       }
 
       document.getElementById('input-phone').value = currentUser.phone || '';
@@ -783,7 +769,7 @@
       switchTab(role);
     }
 
-    // CAMBIO DE PESTAÑAS
+    // CAMBIO DE PESTAÑAS Y FIX MAPA RE-RENDER
     function switchTab(tab) {
       currentTab = tab;
       const clientBtn = document.getElementById('tab-client-btn');
@@ -794,8 +780,8 @@
       const driverView = document.getElementById('view-driver');
       const adminView = document.getElementById('view-admin');
 
-      const activeStyle = "flex-1 py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 bg-brand-600 text-white shadow-md";
-      const inactiveStyle = "flex-1 py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200";
+      const activeStyle = "flex-1 py-2 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20";
+      const inactiveStyle = "flex-1 py-2 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200";
 
       clientBtn.className = tab === 'client' ? activeStyle : inactiveStyle;
       driverBtn.className = tab === 'driver' ? activeStyle : inactiveStyle;
@@ -805,6 +791,7 @@
       driverView.classList.toggle('hidden', tab !== 'driver');
       adminView.classList.toggle('hidden', tab !== 'admin');
 
+      // CORRECCIÓN MAPA GRIS AL CAMBIAR DE PESTAÑA
       if (tab === 'client' && leafletMap) {
         setTimeout(() => leafletMap.invalidateSize(), 300);
       }
@@ -813,16 +800,15 @@
       if (!isFirebaseReady) renderLocalStateAll();
     }
 
-    // CLIENTE: SOLICITAR MANDADO (CON COORDENADAS DE MAPA)
+    // CLIENTE: SOLICITAR MANDADO SIMPLIFICADO (UBER EATS STYLE)
     async function handleCreateOrder(e) {
       e.preventDefault();
       const description = document.getElementById('input-description').value.trim();
-      const origin = document.getElementById('input-origin').value.trim();
       const destination = document.getElementById('input-destination').value.trim();
       const phone = document.getElementById('input-phone').value.trim().replace(/[^0-9]/g, '');
       const price = parseInt(document.getElementById('input-price').value);
 
-      if (!description || !origin || !destination || !phone || !price) {
+      if (!description || !destination || !phone || !price) {
         showToast('Por favor completa todos los campos', 'error');
         return;
       }
@@ -830,10 +816,8 @@
       const newOrder = {
         id: 'UB-' + Math.floor(100000 + Math.random() * 900000),
         description,
-        origin,
         destination,
-        originCoords: currentOriginCoords,
-        destinationCoords: currentDestinationCoords,
+        destinationCoords: deliveryCoords,
         customerPhone: phone,
         customerName: currentUser.name || 'Cliente',
         estimatedPrice: price,
@@ -891,11 +875,11 @@
 
       if (order.status === 'pending') {
         progressBar.style.width = '25%';
-        lblPending.className = 'text-brand-400 font-bold';
+        lblPending.className = 'text-emerald-400 font-bold';
         driverCard.classList.add('hidden');
       } else if (order.status === 'assigned' || order.status === 'in_transit') {
         progressBar.style.width = order.status === 'assigned' ? '50%' : '75%';
-        (order.status === 'assigned' ? lblAssigned : lblTransit).className = 'text-brand-400 font-bold';
+        (order.status === 'assigned' ? lblAssigned : lblTransit).className = 'text-emerald-400 font-bold';
         driverCard.classList.remove('hidden');
         
         if (order.driverInfo) {
@@ -961,7 +945,7 @@
       renderAdminStats(localOrders);
     }
 
-    // RENDERIZAR FEED DE CARRERAS (CON NAVEGACIÓN GPS DE GOOGLE MAPS)
+    // RENDERIZAR FEED DE CARRERAS (DOMICILIARIO - CON BOTÓN GOOGLE MAPS GPS)
     function renderOrdersFeed(orders) {
       const feed = document.getElementById('orders-feed');
       const badge = document.getElementById('available-count-badge');
@@ -978,15 +962,15 @@
       }
 
       feed.innerHTML = orders.map(order => {
-        const destLat = order.destinationCoords ? order.destinationCoords.lat : 5.3120;
-        const destLng = order.destinationCoords ? order.destinationCoords.lng : -73.8120;
+        const destLat = order.destinationCoords ? order.destinationCoords.lat : 5.3081;
+        const destLng = order.destinationCoords ? order.destinationCoords.lng : -73.8144;
         const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`;
 
         return `
-          <div class="glass-card rounded-2xl p-4 space-y-3 border border-slate-800 hover:border-brand-500/40 transition-all">
+          <div class="glass-card rounded-2xl p-4 space-y-3 border border-slate-800 hover:border-emerald-500/40 transition-all shadow-lg">
             <div class="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-2">
               <div>
-                <span class="font-mono text-[10px] text-brand-400 font-bold">#${order.id}</span>
+                <span class="font-mono text-[10px] text-emerald-400 font-bold">#${order.id}</span>
                 <h4 class="font-bold text-xs text-slate-100 leading-snug">${escapeHtml(order.description)}</h4>
               </div>
               <div class="text-right">
@@ -996,31 +980,24 @@
 
             <div class="space-y-1 text-xs text-slate-300">
               <div class="flex items-center gap-1.5 truncate">
-                <i class="fa-solid fa-circle-dot text-emerald-400 text-[10px]"></i>
-                <span class="font-semibold text-slate-400">Origen:</span>
-                <span class="truncate">${escapeHtml(order.origin)}</span>
-              </div>
-              <div class="flex items-center gap-1.5 truncate">
-                <i class="fa-solid fa-location-pin text-rose-500 text-[10px]"></i>
-                <span class="font-semibold text-slate-400">Destino:</span>
+                <i class="fa-solid fa-location-dot text-emerald-400 text-xs"></i>
+                <span class="font-semibold text-slate-400">Entrega:</span>
                 <span class="truncate">${escapeHtml(order.destination)}</span>
               </div>
             </div>
 
-            <!-- BOTONES DE ACCIÓN: GPS & ACEPTAR -->
             <div class="pt-2 flex flex-col gap-2 border-t border-slate-800/60">
               <div class="flex items-center justify-between">
                 <span class="text-[11px] text-slate-400">Comisión: <strong class="text-amber-400">$500 COP</strong></span>
                 
-                <!-- Botón Navegar Google Maps GPS -->
                 <a href="${googleMapsUrl}" target="_blank"
                   class="text-[11px] font-bold text-sky-400 bg-sky-950/80 hover:bg-sky-900 border border-sky-800 px-2.5 py-1 rounded-lg flex items-center gap-1">
-                  <i class="fa-solid fa-location-arrow"></i> Ver en GPS
+                  <i class="fa-solid fa-location-arrow"></i> Navegar con GPS
                 </a>
               </div>
 
               <button onclick="acceptOrder('${order.id}')"
-                class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-brand-600 to-emerald-500 hover:from-brand-500 hover:to-emerald-400 text-slate-950 font-bold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5">
+                class="w-full py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5">
                 <i class="fa-solid fa-motorcycle"></i> Aceptar Carrera ($500 COP)
               </button>
             </div>
@@ -1083,7 +1060,7 @@
         }
 
         if (customerPhone) {
-          const text = encodeURIComponent(`Hola, soy ${currentUser.name} de UbaVoy. ¡Ya voy en camino a recoger tu domicilio!`);
+          const text = encodeURIComponent(`Hola, soy ${currentUser.name} de UbaVoy. ¡Ya voy en camino a entregar tu domicilio!`);
           window.open(`https://wa.me/57${customerPhone}?text=${text}`, '_blank');
         }
       } catch (err) {
@@ -1110,7 +1087,7 @@
       feed.innerHTML = myOrders.map(order => `
         <div class="glass-card rounded-xl p-3 text-xs space-y-1.5 border border-slate-800">
           <div class="flex justify-between items-center">
-            <span class="font-mono text-brand-400 font-bold">#${order.id}</span>
+            <span class="font-mono text-emerald-400 font-bold">#${order.id}</span>
             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
               order.status === 'pending' ? 'bg-amber-950 text-amber-400 border border-amber-800' :
               order.status === 'assigned' ? 'bg-blue-950 text-blue-400 border border-blue-800' :
@@ -1121,7 +1098,7 @@
           </div>
           <p class="font-semibold text-slate-200 line-clamp-1">${escapeHtml(order.description)}</p>
           <div class="flex justify-between text-slate-400 text-[11px]">
-            <span>${escapeHtml(order.origin)} ➔ ${escapeHtml(order.destination)}</span>
+            <span>Lugar: ${escapeHtml(order.destination)}</span>
             <span class="font-bold text-amber-400">$${order.estimatedPrice.toLocaleString()} COP</span>
           </div>
         </div>
@@ -1157,7 +1134,7 @@
       }
 
       feed.innerHTML = drivers.map(driver => `
-        <div class="glass-card rounded-2xl p-4 space-y-3 border border-slate-800">
+        <div class="glass-card rounded-2xl p-4 space-y-3 border border-slate-800 shadow-md">
           <div class="flex items-center justify-between">
             <div>
               <h4 class="font-bold text-sm text-white flex items-center gap-1.5">
@@ -1270,7 +1247,7 @@
       const toastIcon = document.getElementById('toast-icon');
 
       toastMsg.innerText = message;
-      toastIcon.className = type === 'error' ? "fa-solid fa-circle-exclamation text-rose-400 text-base" : "fa-solid fa-circle-check text-brand-400 text-base";
+      toastIcon.className = type === 'error' ? "fa-solid fa-circle-exclamation text-rose-400 text-base" : "fa-solid fa-circle-check text-emerald-400 text-base";
       toast.className = `fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border ${type === 'error' ? 'border-rose-500/50' : 'border-emerald-500/50'} shadow-2xl flex items-center gap-3`;
 
       toast.classList.remove('hidden');
