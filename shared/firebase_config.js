@@ -1,10 +1,7 @@
 /**
- * UbaVoy - Configuración Compartida de Firebase Firestore (Proyecto: ubavoy)
+ * UbaVoy - Configuración Compartida de Firebase Firestore & Auth (Proyecto: ubavoy)
  * 
- * Este archivo es compartido por las 3 aplicaciones de UbaVoy:
- * 1. PWA Cliente (/apps/client)
- * 2. PWA Domiciliario (/apps/driver)
- * 3. Dashboard Administrador (/apps/admin)
+ * Incluye inicialización de Firestore y Firebase Auth con Google Auth Provider.
  */
 
 const firebaseConfig = {
@@ -23,8 +20,10 @@ const UBATE_CENTER = {
   zoom: 15
 };
 
-// Inicialización global de Firebase Firestore
+// Inicialización global de Firebase Firestore & Auth
 let db = null;
+let auth = null;
+let googleProvider = null;
 
 try {
   if (typeof firebase !== 'undefined') {
@@ -33,6 +32,12 @@ try {
       console.log("⚡ [UbaVoy Shared] Firebase (ubavoy) inicializado correctamente.");
     }
     db = firebase.firestore();
+
+    if (firebase.auth) {
+      auth = firebase.auth();
+      googleProvider = new firebase.auth.GoogleAuthProvider();
+      console.log("🔒 [UbaVoy Shared] Firebase Auth & Google Provider configurados.");
+    }
     
     // Habilitar persistencia de datos local (Modo Offline PWA)
     db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
@@ -46,12 +51,29 @@ try {
     console.error("❌ SDK de Firebase no encontrado en el entorno.");
   }
 } catch (error) {
-  console.warn("⚠️ Error al inicializar Firebase Firestore:", error.message);
+  console.warn("⚠️ Error al inicializar Firebase Firestore/Auth:", error.message);
+}
+
+/**
+ * AUTENTICACIÓN GOOGLE AUTH
+ */
+async function signInWithGoogle() {
+  if (!auth) {
+    throw new Error("SDK de Firebase Auth no disponible");
+  }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  return await auth.signInWithPopup(provider);
+}
+
+async function signOutUser() {
+  if (auth) {
+    await auth.signOut();
+  }
 }
 
 /**
  * REPRODUCTOR DE ALERTA SONORA EN TIEMPO REAL (Web Audio API)
- * Emite un tono sintético tipo 'chime' para notificar nuevos pedidos al domiciliario.
  */
 function playNewOrderSound() {
   try {
