@@ -72,14 +72,18 @@
       border-bottom: 1px solid rgba(245, 158, 11, 0.25);
     }
 
-    /* EFECTO PARPADEO NEÓN DESTACADO PARA NUEVAS CARRERAS */
-    @keyframes neonFlash {
-      0% { background-color: rgba(16, 185, 129, 0.45); border-color: #10b981; box-shadow: 0 0 25px #10b981; }
-      50% { background-color: rgba(245, 158, 11, 0.45); border-color: #f59e0b; box-shadow: 0 0 25px #f59e0b; }
-      100% { background-color: rgba(16, 185, 129, 0.45); border-color: #10b981; box-shadow: 0 0 25px #10b981; }
+    /* BUCLE DE PARPADEO Y PULSO DE ALERTA NEÓN CONTINUA */
+    @keyframes alarmPulseKeyframes {
+      0% { background-color: rgba(16, 185, 129, 0.5); border-color: #10b981; box-shadow: 0 0 30px #10b981; }
+      50% { background-color: rgba(245, 158, 11, 0.5); border-color: #f59e0b; box-shadow: 0 0 30px #f59e0b; }
+      100% { background-color: rgba(16, 185, 129, 0.5); border-color: #10b981; box-shadow: 0 0 30px #10b981; }
+    }
+    .alarm-pulse {
+      animation: alarmPulseKeyframes 0.4s infinite alternate;
+      border-radius: 1rem;
     }
     .neon-flash-alert {
-      animation: neonFlash 0.5s infinite alternate;
+      animation: alarmPulseKeyframes 0.4s infinite alternate;
       border-radius: 1rem;
     }
   </style>
@@ -162,7 +166,7 @@
           <span class="flex items-center gap-2 text-xs text-slate-300 font-semibold">
             <i class="fa-solid fa-volume-high text-amber-400"></i> Alerta Sonora y Vibración
           </span>
-          <button onclick="triggerNewOrderAlert(null)" class="text-[11px] bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm">
+          <button onclick="testAlarmPulseOnce()" class="text-[11px] bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm">
             Probar Alerta 🎵📳
           </button>
         </div>
@@ -333,11 +337,12 @@
 
   </div>
 
-  <!-- JAVASCRIPT DOMICILIARIO CON SISTEMA MULTICAPA DE NOTIFICACIONES -->
+  <!-- JAVASCRIPT DOMICILIARIO CON BUCLE DE ALERTA CONTINUO Y ACEPTACIÓN ATÓMICA -->
   <script>
     let isAvailable = false;
     let unsubscribeOrders = null;
     let isInitialLoad = true;
+    let alarmIntervalId = null;
 
     let currentDriver = JSON.parse(localStorage.getItem('ubavoy_driver_user') || JSON.stringify({
       uid: null,
@@ -367,10 +372,8 @@
       updateAvailabilityUI();
 
       if (isAvailable) {
-        // a) Desbloquear Audio Web API
         playAlarmSound();
 
-        // b) Solicitar Permisos de Notificación del Sistema
         if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
           Notification.requestPermission();
         }
@@ -378,52 +381,90 @@
         startDriverFirestoreRealtime();
         showToast('🟢 ¡Estás DISPONIBLE para recibir carreras!');
       } else {
+        stopAlarmLoop(); // DETENER BUCLE DE ALERTA INMEDIATAMENTE
         stopDriverFirestoreRealtime();
         showToast('🔴 Has pasado a estado EN PAUSA.', 'warning');
       }
     }
 
-    // 2. SISTEMA MULTICAPA DE ALERTA (SONIDO + VIBRACIÓN + NOTIFICACIÓN WEB + PARPADEO NEÓN)
-    function triggerNewOrderAlert(order) {
-      // a) Sonido de Alerta Sirena Chime
-      playAlarmSound();
+    // 2. BUCLE CONTINUO DE ALERTA INTERMITENTE (SONIDO + VIBRACIÓN + PARPADEO NEÓN)
+    function startAlarmLoop(order) {
+      if (alarmIntervalId !== null) return;
 
-      // b) Vibración Háctica Móvil
-      if ("vibrate" in navigator) {
-        try {
-          navigator.vibrate([500, 200, 500, 200, 1000]);
-        } catch (e) {}
-      }
-
-      // c) Notificación Push / Web System API
+      // Notificación Push inicial si está minimizado
       if ("Notification" in window && Notification.permission === "granted") {
         try {
           const taskDesc = order ? (order.task_description || order.description || 'Mandado Exprés') : 'Nuevo Mandado Libre';
           const addr = order ? (order.delivery_address || order.destination || 'Ubaté Centro') : 'Ubaté';
-          
           new Notification("🚨 ¡NUEVO MANDADO EN UBATÉ!", {
             body: `${taskDesc} - ${addr}`,
             icon: "/icon-192.svg",
-            vibrate: [500, 200, 500]
+            vibrate: [300, 200, 300]
           });
         } catch (e) {}
       }
 
-      // d) Indicador Visual Destacado Parpadeo Neón
-      triggerNeonFlashingEffect();
+      // Intervalo cada 1500ms
+      alarmIntervalId = setInterval(() => {
+        // a) Beep sonoro / Sirena
+        playAlarmSound();
+
+        // b) Vibración Móvil cada 1500ms
+        if ("vibrate" in navigator) {
+          try {
+            navigator.vibrate([300, 200, 300]);
+          } catch (e) {}
+        }
+
+        // c) Toggle Parpadeo Neón Visual
+        toggleNeonAlarmPulse();
+
+      }, 1500);
+
+      // Disparo inmediato en el instante 0
+      playAlarmSound();
+      if ("vibrate" in navigator) {
+        try { navigator.vibrate([300, 200, 300]); } catch (e) {}
+      }
+      toggleNeonAlarmPulse();
     }
 
-    function triggerNeonFlashingEffect() {
+    function stopAlarmLoop() {
+      if (alarmIntervalId !== null) {
+        clearInterval(alarmIntervalId);
+        alarmIntervalId = null;
+      }
+
+      // Cancelar vibraciones del sistema
+      if ("vibrate" in navigator) {
+        try {
+          navigator.vibrate(0);
+        } catch (e) {}
+      }
+
+      // Limpiar clases de parpadeo neón
       const container = document.getElementById('orders-feed');
       const header = document.querySelector('header');
+      if (container) {
+        container.classList.remove('alarm-pulse');
+        container.classList.remove('neon-flash-alert');
+      }
+      if (header) {
+        header.classList.remove('alarm-pulse');
+        header.classList.remove('neon-flash-alert');
+      }
+    }
 
-      if (container) container.classList.add('neon-flash-alert');
-      if (header) header.classList.add('neon-flash-alert');
+    function toggleNeonAlarmPulse() {
+      const container = document.getElementById('orders-feed');
+      const header = document.querySelector('header');
+      if (container) container.classList.toggle('alarm-pulse');
+      if (header) header.classList.toggle('alarm-pulse');
+    }
 
-      setTimeout(() => {
-        if (container) container.classList.remove('neon-flash-alert');
-        if (header) header.classList.remove('neon-flash-alert');
-      }, 6000);
+    function testAlarmPulseOnce() {
+      startAlarmLoop(null);
+      setTimeout(() => stopAlarmLoop(), 5000);
     }
 
     function playAlarmSound() {
@@ -595,12 +636,13 @@
         const countBadge = document.getElementById('available-count-badge');
         if (countBadge) countBadge.innerText = `${pendingOrders.length} Libres`;
 
-        // 3. DETECCION EN TIEMPO REAL CON SISTEMA MULTICAPA DE ALERTA
-        if (!isInitialLoad && snapshot.docChanges().some(change => change.type === "added")) {
-          const addedChange = snapshot.docChanges().find(change => change.type === "added");
-          const addedOrder = addedChange ? addedChange.doc.data() : null;
-          triggerNewOrderAlert(addedOrder);
+        // 3. CONTROL DE BUCLE DE ALERTA SEGÚN DISPONIBILIDAD DE CARRERAS LIBRES
+        if (pendingOrders.length > 0 && isAvailable) {
+          startAlarmLoop(pendingOrders[0]);
+        } else {
+          stopAlarmLoop();
         }
+
         isInitialLoad = false;
 
         renderOrdersFeed(pendingOrders);
@@ -611,6 +653,7 @@
     }
 
     function stopDriverFirestoreRealtime() {
+      stopAlarmLoop();
       if (unsubscribeOrders) {
         unsubscribeOrders();
         unsubscribeOrders = null;
@@ -771,7 +814,10 @@
       }).join('');
     }
 
+    // 2. ACEPTACIÓN ATÓMICA EN FIRESTORE CON CONCURRENCIA
     async function acceptOrder(orderId) {
+      stopAlarmLoop(); // DETENER ALERTA EN ACCIÓN DIRECTA
+
       if (currentDriver.is_approved === false) {
         showToast('⚠️ Tu cuenta no ha sido aprobada por el Administrador.', 'error');
         return;
@@ -790,6 +836,7 @@
         await db.collection('orders').doc(orderId).update({
           status: 'assigned',
           assigned_driver_id: driverId,
+          driver_id: driverId,
           driver_name: currentDriver.name,
           driver_phone: currentDriver.phone,
           driver_vehicle: currentDriver.vehicle,
