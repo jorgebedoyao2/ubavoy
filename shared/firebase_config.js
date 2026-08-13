@@ -27,6 +27,30 @@ let db = null;
 let auth = null;
 let googleProvider = null;
 
+// Funciones helper SDK v10 (collection, addDoc) sobre Firebase Compat
+function collection(dbInstance, collectionName) {
+  const targetDb = dbInstance || (typeof db !== 'undefined' ? db : null);
+  if (targetDb && typeof targetDb.collection === 'function') {
+    return targetDb.collection(collectionName);
+  }
+  return { collectionName, dbInstance: targetDb };
+}
+
+async function addDoc(collRef, payload) {
+  if (collRef && typeof collRef.add === 'function') {
+    return await collRef.add(payload);
+  }
+  if (typeof db !== 'undefined' && db && typeof collRef === 'string') {
+    return await db.collection(collRef).add(payload);
+  }
+  throw new Error("Referencia de colección Firestore no válida");
+}
+
+if (typeof window !== 'undefined') {
+  window.collection = collection;
+  window.addDoc = addDoc;
+}
+
 try {
   if (typeof firebase !== 'undefined') {
     if (!firebase.apps.length) {
@@ -34,6 +58,7 @@ try {
       console.log("⚡ [UbaVoy Shared] Firebase (ubavoy) inicializado correctamente.");
     }
     db = firebase.firestore();
+    window.db = db;
 
     if (firebase.auth) {
       auth = firebase.auth();

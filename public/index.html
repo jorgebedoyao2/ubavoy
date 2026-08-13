@@ -187,7 +187,7 @@
             <label class="block text-xs font-semibold text-slate-300 mb-1">Tu Número WhatsApp (+57)</label>
             <div class="relative">
               <span class="absolute left-3 top-2.5 text-slate-400 text-xs font-mono">+57</span>
-              <input type="tel" id="clientPhone" required placeholder="3101234567"
+              <input id="clientPhone" type="tel" value="3044834698" required placeholder="3044834698"
                 class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl pl-12 pr-3 py-2.5 text-sm text-slate-100 font-mono outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all">
             </div>
           </div>
@@ -195,7 +195,7 @@
           <!-- DESCRIPCIÓN DEL MANDADO -->
           <div>
             <label class="block text-xs font-semibold text-slate-300 mb-1">¿Qué necesitas que compremos o llevemos?</label>
-            <textarea id="taskDesc" rows="2" required placeholder="Ej: Traer 1 Droguería Central (Acetaminofén) o Recoger llaves en Barrio San José"
+            <textarea id="taskDesc" rows="2" required placeholder="Ej: Traer un paquete de la plaza principal..."
               class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2.5 text-xs text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all resize-none"></textarea>
           </div>
 
@@ -208,9 +208,9 @@
             <!-- CONTENEDOR VISUAL DEL MAPA Y BOTÓN GPS -->
             <div class="mb-2">
               <label class="block text-xs font-semibold text-slate-300 mb-1">🗺️ Ubicación exacta en el Mapa (Ubaté)</label>
-              <div id="map" class="w-full h-48 rounded-xl border border-slate-700/60 overflow-hidden z-0"></div>
-              <button type="button" id="locateMeBtn" onclick="getCurrentLocationClient()" class="mt-2 w-full bg-slate-800/80 border border-emerald-500/30 text-emerald-400 text-xs py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-700/80 transition">
-                🎯 Fijar mi Ubicación Actual
+              <div id="map" class="w-full h-48 rounded-xl border border-slate-700/60 overflow-hidden mb-2 z-0"></div>
+              <button type="button" id="locateMeBtn" onclick="getCurrentLocationClient()" class="w-full bg-slate-800/80 border border-emerald-500/30 text-emerald-400 text-xs py-2 rounded-xl mb-4 flex items-center justify-center gap-2 hover:bg-slate-700/80 transition">
+                📍 Fijar mi Ubicación Actual en Ubaté
               </button>
             </div>
           </div>
@@ -235,9 +235,8 @@
 
           <!-- BOTÓN SUBMIT CON ESTIMACIÓN -->
           <button type="submit" id="submitOrderBtn"
-            class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-display font-extrabold text-sm tracking-wide shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
-            <i class="fa-solid fa-paper-plane text-base"></i>
-            <span>Pedir Domiciliario ($<span id="estimatedPriceDisplay">5.000</span> COP)</span>
+            class="w-full bg-emerald-500 text-slate-950 font-bold py-3.5 rounded-xl shadow-lg hover:bg-emerald-400 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+            🚀 Pedir Domiciliario ($<span id="estimatedPriceDisplay">5.000</span> COP)
           </button>
         </form>
       </div>
@@ -449,67 +448,57 @@
     }
 
     function bindOrderFormSubmitHandler() {
-      const orderForm = document.getElementById('orderForm');
-      if (!orderForm) return;
+      const orderForm = document.getElementById('orderForm') || document.querySelector('form');
 
-      orderForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        console.log("🚀 Enviando pedido desde el cliente a Firestore...");
+      if (orderForm) {
+        orderForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          console.log("🔥 Guardando pedido en Firestore...");
 
-        const taskDesc = (document.getElementById('taskDesc')?.value || document.getElementById('taskDescription')?.value || '').trim();
-        const deliveryAddress = document.getElementById('deliveryAddress')?.value?.trim();
-        const clientPhone = document.getElementById('clientPhone')?.value?.trim().replace(/[^0-9]/g, '') || '3101234567';
-
-        if (!taskDesc || !deliveryAddress) {
-          alert("Por favor ingresa la descripción del mandado y la dirección de entrega.");
-          return;
-        }
-
-        try {
+          const taskDesc = document.getElementById('taskDesc')?.value || 'Mandado Exprés';
+          const deliveryAddress = document.getElementById('deliveryAddress')?.value || 'Ubaté Centro';
+          const clientPhone = document.getElementById('clientPhone')?.value || '3044834698';
           const deliveryPin = Math.floor(1000 + Math.random() * 9000).toString();
-          const createdAtIso = new Date().toISOString();
-          const coords = window.currentCoords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
 
-          const newOrder = {
-            task_description: taskDesc,
-            delivery_address: deliveryAddress,
-            client_phone: clientPhone,
-            client_name: currentClient.name || 'Cliente UbaVoy',
-            delivery_coords: coords,
-            estimated_price: selectedPrice || 5000,
-            status: 'pending',
-            delivery_pin: deliveryPin,
-            created_at: createdAtIso
-          };
+          try {
+            const orderPayload = {
+              client_phone: clientPhone,
+              task_description: taskDesc,
+              delivery_address: deliveryAddress,
+              delivery_coords: window.currentCoords || { lat: 5.3081, lng: -73.8144 },
+              estimated_price: selectedPrice || 5000,
+              status: 'pending',
+              delivery_pin: deliveryPin,
+              created_at: new Date().toISOString()
+            };
 
-          if (typeof generateOrderHash === 'function') {
-            newOrder.security_hash = await generateOrderHash(newOrder);
-          }
+            if (typeof generateOrderHash === 'function') {
+              orderPayload.security_hash = await generateOrderHash(orderPayload);
+            }
 
-          console.log("🔥 Guardando orden en Firestore (ubavoy)...", newOrder);
-
-          if (typeof db !== 'undefined' && db !== null) {
-            const docRef = await db.collection('orders').add(newOrder);
-            console.log("✅ Pedido creado con exito ID:", docRef.id);
+            const docRef = await addDoc(collection(db, "orders"), orderPayload);
+            console.log("✅ PEDIDO CREADO EXITOSAMENTE CON ID:", docRef.id);
 
             localStorage.setItem('ubavoy_active_order', docRef.id);
             localStorage.setItem('ubavoy_active_order_id', docRef.id);
-
-            if (typeof trackClientOrder === 'function') {
-              trackClientOrder(docRef.id);
+            
+            // Activar rastreo en vivo si la función existe
+            if (typeof window.trackClientOrder === 'function') {
+              window.trackClientOrder(docRef.id);
             }
 
-            alert(`🎉 ¡Mandado solicitado con éxito!\nCódigo de Entrega: ${deliveryPin}`);
+            alert(`🎉 ¡Mandado solicitado con éxito!\nCódigo de Entrega (PIN): ${deliveryPin}`);
             orderForm.reset();
-          } else {
-            showToast("⚠️ Conexión local simulada", "warning");
+            if (document.getElementById('clientPhone')) {
+              document.getElementById('clientPhone').value = '3044834698';
+            }
+            
+          } catch (err) {
+            console.error("❌ Error al guardar en Firestore:", err);
+            alert("Fallo al enviar pedido: " + err.message);
           }
-
-        } catch (error) {
-          console.error("❌ Error guardando pedido:", error);
-          alert("Error al enviar el pedido: " + error.message);
-        }
-      });
+        });
+      }
     }
 
     window.trackClientOrder = function(orderId) {
