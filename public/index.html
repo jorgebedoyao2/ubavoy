@@ -6,7 +6,7 @@
   <title>UbaVoy - Pedir Domicilio y Mandado Exprés</title>
   
   <!-- PWA Metadata & Theme -->
-  <link rel="manifest" href="/apps/client/manifest.json">
+  <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#059669">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -64,8 +64,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   
-  <!-- Shared Firebase Config File -->
+  <!-- Shared Firebase Config File & Universal PWA Installer -->
   <script src="/shared/firebase_config.js"></script>
+  <script src="/shared/pwa_installer.js"></script>
 
   <style>
     body {
@@ -140,6 +141,15 @@
       </button>
     </header>
 
+    <!-- BANNER DE INSTALACIÓN PWA PERMANENTE UNIVERSAL -->
+    <div class="px-4 pt-3 pb-0">
+      <button id="pwaInstallBtnClient" onclick="installPwaApp('client')"
+        class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-display font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all active:scale-95">
+        <i class="fa-solid fa-mobile-screen-button text-sm"></i>
+        <span>📲 Instalar App Cliente en mi Celular</span>
+      </button>
+    </div>
+
     <!-- MAIN CONTENT CLIENTE -->
     <main class="flex-1 px-4 py-4 space-y-5">
 
@@ -149,310 +159,205 @@
           <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
             <i class="fa-solid fa-location-dot text-emerald-400"></i> Entregar en:
           </span>
-          <button onclick="openAddAddressModal()" class="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
-            <i class="fa-solid fa-plus"></i> Nueva Dirección
+          <button onclick="saveCurrentAsFavoriteAddress()" class="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1">
+            <i class="fa-solid fa-bookmark"></i> Guardar favorita
           </button>
         </div>
 
-        <div id="saved-addresses-pills" class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <!-- Renderizado de pills -->
+        <div id="saved-addresses-container" class="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <!-- Tarjetas dinámicas de direcciones guardadas -->
         </div>
       </div>
 
-      <!-- SECTOR 2: FORMULARIO CREAR MANDADO -->
-      <div class="glass-card rounded-2xl p-5 space-y-4 relative overflow-hidden shadow-xl shadow-slate-950/50">
+      <!-- SECTOR 2: TARJETA DE PEDIDO Y CALCULADORA TARIFA Ubaté -->
+      <div class="glass-card rounded-2xl p-4 space-y-4 shadow-xl border-emerald-500/30">
         <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
-          <h2 class="font-display font-bold text-base text-white flex items-center gap-2">
-            <i class="fa-solid fa-paper-plane text-emerald-400"></i> Pedir Mandado Exprés
-          </h2>
-          <span id="client-total-orders-badge" class="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-800">
-            0 Pedidos
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 pulse-badge"></span>
+            <h2 class="font-display font-bold text-sm text-slate-100">Solicitar Mandado</h2>
+          </div>
+          <span class="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded-md border border-amber-800/50">
+            Ubaté Centro
           </span>
         </div>
 
-        <form id="orderForm" class="space-y-4">
+        <form id="orderForm" onsubmit="handleCreateOrderSubmit(event)" class="space-y-3.5">
+          <!-- TELÉFONO CLIENTE / WHATSAPP -->
           <div>
-            <label class="block text-xs font-semibold text-slate-200 mb-1.5">
-              ¿Qué necesitas que llevemos o compremos? <span class="text-rose-400">*</span>
-            </label>
-            <textarea id="taskDesc" required rows="3" 
-              placeholder="Ej: Traer un paquete de la plaza principal, comprar medicamentos en la droguería del centro..."
-              class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 outline-none transition-all resize-none shadow-inner"></textarea>
-          </div>
-
-          <div>
-            <label class="block text-xs font-semibold text-slate-200 mb-1.5">
-              Punto de Entrega <span class="text-rose-400">*</span>
-            </label>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Tu Número WhatsApp (+57)</label>
             <div class="relative">
-              <i class="fa-solid fa-location-crosshairs absolute left-3.5 top-3 text-emerald-400 text-sm"></i>
-              <input type="text" id="deliveryAddress" required placeholder="Ej: Barrio Santa Bárbara, frente a la tienda X"
-                class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 outline-none transition-all">
+              <span class="absolute left-3 top-2.5 text-slate-400 text-xs font-mono">+57</span>
+              <input type="tel" id="clientPhone" required placeholder="3101234567"
+                class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl pl-12 pr-3 py-2.5 text-sm text-slate-100 font-mono outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all">
             </div>
           </div>
 
-          <!-- MAPA INTERACTIVO LEAFLET -->
-          <div class="space-y-2 pt-1">
-            <div class="flex items-center justify-between">
-              <label class="block text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                <i class="fa-solid fa-map text-emerald-400"></i> Ubicación exacta en el Mapa
-              </label>
-            </div>
+          <!-- DESCRIPCIÓN DEL MANDADO -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">¿Qué necesitas que compremos o llevemos?</label>
+            <textarea id="taskDescription" rows="2" required placeholder="Ej: Traer 1 Droguería Central (Acetaminofén) o Recoger llaves en Barrio San José"
+              class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2.5 text-xs text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all resize-none"></textarea>
+          </div>
 
-            <div class="relative w-full rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl">
-              <div id="map" class="h-48 w-full z-0 bg-slate-900"></div>
+          <!-- DIRECCIÓN DE ENTREGA Y SELECTOR DE MAPA LEAFLET -->
+          <div class="space-y-2">
+            <label class="block text-xs font-semibold text-slate-300">Dirección de Entrega en Ubaté</label>
+            <input type="text" id="deliveryAddress" required placeholder="Ej: Carrera 7 # 8-45, Barrio Centro"
+              class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2.5 text-xs text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all">
 
-              <div class="absolute inset-0 pointer-events-none z-10 flex items-center justify-center -mt-6">
-                <div id="uber-center-pin" class="flex flex-col items-center justify-center">
-                  <div class="w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow-xl shadow-emerald-500/50 border-2 border-white">
-                    <i class="fa-solid fa-location-dot"></i>
-                  </div>
-                  <div class="w-2.5 h-1 bg-black/60 rounded-full blur-[1px] mt-0.5"></div>
-                </div>
+            <!-- BOTÓN Y CONTENEDOR MAPA LEAFLET -->
+            <button type="button" onclick="toggleMapModal()"
+              class="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-emerald-400 text-xs font-semibold flex items-center justify-center gap-2 transition-all">
+              <i class="fa-solid fa-map-pin"></i> Ubicar punto exacto en el Mapa de Ubaté
+            </button>
+
+            <!-- MODAL CONTENEDOR MAPA INTERACTIVO LEAFLET -->
+            <div id="mapContainerModal" class="hidden relative w-full h-56 rounded-xl overflow-hidden border border-emerald-500/40 shadow-inner">
+              <div id="leafletMap" class="w-full h-full"></div>
+              <div class="absolute bottom-2 left-2 right-2 z-[400] bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-800 flex items-center justify-between text-[11px]">
+                <span class="text-slate-300 truncate max-w-[200px]" id="mapSelectedCoordsText">Ubaté Centro (5.3081, -73.8144)</span>
+                <button type="button" onclick="confirmMapLocation()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-2.5 py-1 rounded-md font-bold text-[10px]">
+                  Confirmar Punto
+                </button>
               </div>
+            </div>
+          </div>
 
-              <button type="button" onclick="useCurrentLocation()"
-                class="absolute bottom-3 right-3 z-20 bg-slate-900/90 hover:bg-slate-800 text-emerald-400 border border-emerald-500/40 font-bold text-[11px] px-3 py-1.5 rounded-xl shadow-xl backdrop-blur-md flex items-center gap-1.5 transition-all active:scale-95">
-                <span>🎯 Fijar mi Ubicación Actual</span>
+          <!-- TARIFADOR UBATÉ (URBANO $5.000 vs PERIMETRO $7.000 COP) -->
+          <div class="bg-slate-900/90 rounded-xl p-3 border border-slate-800 space-y-2">
+            <span class="text-[11px] font-semibold text-slate-300 block">Zona de Cobertura y Tarifa:</span>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" onclick="selectPricingZone('urban', 5000)" id="btnZoneUrban"
+                class="py-2 px-2.5 rounded-xl border text-center transition-all bg-emerald-950/80 border-emerald-500 text-emerald-300 font-bold text-xs">
+                <span class="block text-[10px] text-slate-400 font-normal">Casco Urbano</span>
+                $5.000 COP
+              </button>
+
+              <button type="button" onclick="selectPricingZone('perimeter', 7000)" id="btnZonePerimeter"
+                class="py-2 px-2.5 rounded-xl border border-slate-700/80 bg-slate-950 text-slate-400 text-center transition-all hover:border-slate-600 text-xs">
+                <span class="block text-[10px] text-slate-500 font-normal">Perímetro / Veredal</span>
+                $7.000 COP
               </button>
             </div>
           </div>
 
-          <!-- CELULAR & PAGO -->
-          <div class="grid grid-cols-2 gap-3 pt-1">
-            <div>
-              <label class="block text-xs font-semibold text-slate-200 mb-1">Tu WhatsApp</label>
-              <div class="relative">
-                <i class="fa-brands fa-whatsapp absolute left-3 top-2.5 text-emerald-400 text-xs"></i>
-                <input type="tel" id="clientPhone" required placeholder="3101234567"
-                  class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-100 outline-none">
-              </div>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-200 mb-1">Pago Domicilio (COP)</label>
-              <div class="relative">
-                <span class="absolute left-3 top-2 text-slate-400 text-xs font-bold">$</span>
-                <input type="number" id="input-price" min="3000" step="500" value="5000" required
-                  class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 rounded-xl pl-7 pr-3 py-2 text-xs font-bold text-slate-100 outline-none">
-              </div>
-            </div>
-          </div>
-
-          <button type="submit" class="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-extrabold text-sm tracking-wide shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
-            <span>Solicitar Domiciliario Ahora</span>
-            <i class="fa-solid fa-arrow-right"></i>
+          <!-- BOTÓN SUBMIT CON ESTIMACIÓN -->
+          <button type="submit" id="submitOrderBtn"
+            class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-display font-extrabold text-sm tracking-wide shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+            <i class="fa-solid fa-paper-plane text-base"></i>
+            <span>Pedir Domiciliario ($<span id="estimatedPriceDisplay">5.000</span> COP)</span>
           </button>
         </form>
       </div>
 
-      <!-- SECTOR 3: RASTREO EN VIVO EN TIEMPO REAL -->
-      <div id="tracking-section" class="hidden space-y-3">
-        <div class="flex items-center justify-between">
-          <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 pulse-badge"></span>
-            Rastreo de Pedido Activo
-          </h3>
-          <button onclick="clearActiveTracking()" class="text-xs text-slate-400 hover:text-rose-400">
-            <i class="fa-solid fa-xmark"></i> Ocultar
+      <!-- SECTOR 3: SEGUIMIENTO EN TIEMPO REAL DEL MANDADO ACTIVO -->
+      <div id="active-order-tracking-card" class="hidden glass-card rounded-2xl p-4 border border-amber-500/40 space-y-3.5 shadow-2xl bg-slate-900/90">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+            <h3 class="font-display font-extrabold text-sm text-white flex items-center gap-1.5">
+              <span>Mandado Activo</span>
+              <span id="activeOrderBadgeStatus" class="text-[9px] uppercase px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800">
+                Buscando Domiciliario...
+              </span>
+            </h3>
+          </div>
+          <span id="activeOrderIdDisplay" class="text-xs font-mono font-bold text-amber-400">#0000</span>
+        </div>
+
+        <div class="space-y-1.5 text-xs text-slate-300">
+          <p class="font-bold text-slate-100 truncate" id="activeOrderTask">Mandado Exprés en Ubaté</p>
+          <p class="text-slate-400 text-[11px]" id="activeOrderAddress">Dirección de entrega</p>
+          <div class="flex items-center justify-between pt-1">
+            <span class="text-[11px] text-slate-400">Valor Estimado:</span>
+            <span id="activeOrderPrice" class="font-extrabold text-emerald-400 text-sm">$5,000 COP</span>
+          </div>
+        </div>
+
+        <!-- MOSTRAR PIN DE SEGURIDAD 4 DÍGITOS PARA ENTREGAR -->
+        <div class="bg-slate-950 border border-amber-500/50 rounded-xl p-3 flex items-center justify-between">
+          <div>
+            <span class="text-[10px] text-slate-400 font-semibold block uppercase">Código PIN de Entrega</span>
+            <span class="text-[9px] text-amber-300">Entrégalo al domiciliario al recibir</span>
+          </div>
+          <span id="deliveryPinDisplay" class="font-mono font-black text-xl tracking-widest text-amber-400 bg-amber-950 px-3 py-1 rounded-lg border border-amber-700">
+            ----
+          </span>
+        </div>
+
+        <!-- FICHA DEL DOMICILIARIO ASIGNADO EN TIEMPO REAL -->
+        <div id="assigned-driver-card" class="hidden bg-slate-950/90 border border-emerald-500/40 rounded-xl p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-full bg-emerald-950 border border-emerald-500/50 flex items-center justify-center text-emerald-400 font-bold text-xs">
+                <i class="fa-solid fa-motorcycle"></i>
+              </div>
+              <div>
+                <h4 id="driver-assigned-name" class="font-bold text-xs text-white">Carlos Gómez</h4>
+                <p id="driver-assigned-vehicle" class="text-[10px] text-slate-400">Moto FZ 150 - ABC-123</p>
+              </div>
+            </div>
+
+            <a id="driver-whatsapp-link" href="#" target="_blank"
+              class="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 shadow-md">
+              <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp
+            </a>
+          </div>
+
+          <button onclick="toggleLiveTrackingMapModal()"
+            class="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-emerald-400 font-bold text-xs flex items-center justify-center gap-2 transition-all">
+            <i class="fa-solid fa-map-location-dot"></i> 🗺️ Ver Ubicación y Ruta en Vivo
           </button>
-        </div>
-
-        <div class="glass-card rounded-2xl p-4 border border-emerald-500/30 space-y-3 shadow-xl">
-          <!-- BLOQUE DE CÓDIGO DE ENTREGA PIN DESTACADO DE 4 DÍGITOS -->
-          <div class="bg-emerald-950/90 border border-emerald-500/50 rounded-xl p-3 text-center space-y-1 shadow-inner">
-            <span class="text-[11px] text-emerald-300 font-semibold flex items-center justify-center gap-1.5">
-              <i class="fa-solid fa-key text-emerald-400"></i> Código de Entrega (Muestra al Domiciliario):
-            </span>
-            <span id="deliveryPinDisplay" class="font-mono text-3xl font-black text-emerald-400 tracking-widest block">----</span>
-            <span id="track-delivery-pin" class="hidden font-mono text-3xl font-black text-emerald-400 tracking-widest">----</span>
-          </div>
-
-          <div class="space-y-1.5">
-            <div class="flex justify-between text-[11px] font-semibold" id="status-steps-labels">
-              <span id="step-lbl-pending" class="text-emerald-400">Buscando</span>
-              <span id="step-lbl-assigned" class="text-slate-500">Asignado</span>
-              <span id="step-lbl-transit" class="text-slate-500">En Camino</span>
-              <span id="step-lbl-completed" class="text-slate-500">Entregado</span>
-            </div>
-            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div id="progress-bar" class="h-full bg-emerald-500 w-1/4 transition-all duration-500"></div>
-            </div>
-          </div>
-
-          <div class="bg-slate-900/90 rounded-xl p-3 text-xs space-y-1 border border-slate-800">
-            <div class="flex justify-between text-slate-300">
-              <span>Mandado:</span>
-              <span id="activeOrderTask" class="font-semibold text-slate-100 truncate max-w-[180px]">---</span>
-              <span id="track-description" class="hidden font-semibold text-slate-100">---</span>
-            </div>
-            <div class="flex justify-between text-slate-300">
-              <span>Valor:</span>
-              <span id="activeOrderPrice" class="font-bold text-amber-400">$0 COP</span>
-              <span id="track-price" class="hidden font-bold text-amber-400">$0 COP</span>
-            </div>
-          </div>
-
-          <!-- FICHA DEL DOMICILIARIO ASIGNADO CON BOTONES WHATSAPP Y MAPA UBICACIÓN EN VIVO -->
-          <div id="driver-assigned-card" class="hidden bg-slate-900 border border-emerald-500/40 rounded-xl p-3 space-y-2.5">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-lg font-bold">
-                <i class="fa-solid fa-helmet-safety"></i>
-              </div>
-              <div class="flex-1 min-w-0">
-                <h4 id="assigned-driver-name" class="font-bold text-xs text-white truncate">Carlos Domiciliario</h4>
-                <p id="assigned-driver-vehicle" class="text-[11px] text-slate-400 truncate">Moto FZ 150 - ABC-123</p>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2 pt-1">
-              <a id="btn-whatsapp-driver" href="#" target="_blank"
-                class="py-2 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-md transition-all">
-                <i class="fa-brands fa-whatsapp text-sm"></i>
-                <span>💬 Contactar WhatsApp</span>
-              </a>
-
-              <button id="btn-live-map-driver" type="button" onclick="triggerOpenLiveMapModal()"
-                class="py-2 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-sky-500/40 text-sky-400 text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-md transition-all">
-                <i class="fa-solid fa-map-location-dot"></i>
-                <span>🗺️ Ubicación en Vivo</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- SECTOR 4: HISTORIAL Y REPETICIÓN -->
-      <div class="space-y-3">
-        <h3 class="font-display font-bold text-sm text-white flex items-center gap-2 px-1">
-          <i class="fa-solid fa-clock-rotate-left text-emerald-400"></i> Historial de Mandados
-        </h3>
-        <div id="client-history-feed" class="space-y-2.5">
-          <div class="glass-card rounded-xl p-4 text-center text-xs text-slate-400">
-            No tienes pedidos registrados.
-          </div>
         </div>
       </div>
 
     </main>
 
-    <!-- MODAL MAPA UBICACIÓN EN VIVO (CLIENTE RASTREA AL DOMICILIARIO EN LEAFLET) -->
-    <div id="live-map-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-emerald-500/50 shadow-2xl">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
-            <i class="fa-solid fa-map-location-dot text-emerald-400"></i> Ubicación del Domiciliario en Vivo
+    <!-- MODAL MAPA SEGUIMIENTO EN VIVO PARA CLIENTE -->
+    <div id="live-tracking-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="glass-card w-full max-w-sm rounded-2xl p-4 space-y-3 border border-emerald-500/40 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+            <i class="fa-solid fa-location-crosshairs text-emerald-400"></i> Rastreo en Vivo UbaVoy
           </h3>
-          <button onclick="closeLiveMapModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+          <button onclick="toggleLiveTrackingMapModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
-        <div class="relative w-full rounded-2xl overflow-hidden border border-slate-700 shadow-xl">
-          <div id="live-tracking-map" class="h-64 w-full bg-slate-900"></div>
+        <div class="relative w-full h-64 rounded-xl overflow-hidden border border-slate-800">
+          <div id="leafletLiveTrackingMap" class="w-full h-full"></div>
         </div>
 
         <p class="text-[11px] text-slate-400 text-center">
-          <i class="fa-solid fa-circle-info text-emerald-400"></i> Muestra la ruta entre el punto de entrega y la posición del domiciliario en Ubaté.
+          Posición en tiempo real entre el punto de entrega en Ubaté y tu domiciliario asignado.
         </p>
-
-        <button onclick="closeLiveMapModal()" class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700">
-          Cerrar Mapa
-        </button>
       </div>
     </div>
 
-    <!-- MODAL NUEVA DIRECCIÓN -->
-    <div id="address-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-slate-700 shadow-2xl">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
-            <i class="fa-solid fa-map-pin text-emerald-400"></i> Nueva Dirección Guardada
-          </h3>
-          <button onclick="closeAddAddressModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-
-        <form onsubmit="handleSaveNewAddress(event)" class="space-y-3 text-xs">
-          <div>
-            <label class="block font-semibold text-slate-300 mb-1">Etiqueta de la Ubicación</label>
-            <select id="addr-tag" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-bold outline-none focus:border-emerald-500">
-              <option value="Casa">🏠 Casa</option>
-              <option value="Trabajo">🏢 Trabajo</option>
-              <option value="Otra">📍 Otra Ubicación</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="block font-semibold text-slate-300 mb-1">Dirección / Lugar en Ubaté</label>
-            <input type="text" id="addr-text" required placeholder="Ej: Calle 6 #7-12, Barrio San José"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-semibold outline-none focus:border-emerald-500">
-          </div>
-
-          <div>
-            <label class="block font-semibold text-slate-300 mb-1">Detalle / Referencia (Opcional)</label>
-            <input type="text" id="addr-detail" placeholder="Ej: Apt 302 / Junto a la panadería"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-emerald-500">
-          </div>
-
-          <button type="submit" class="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md">
-            <i class="fa-solid fa-check"></i> Guardar Dirección
-          </button>
-        </form>
-      </div>
-    </div>
-
-    <!-- MODAL AUTH CON GOOGLE Y WHATSAPP -->
+    <!-- MODAL AUTH GOOGLE CLIENTE -->
     <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
       <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-slate-700 shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3">
           <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
-            <i class="fa-solid fa-user-circle text-emerald-400"></i> Mi Perfil de Cliente
+            <i class="fa-solid fa-user-shield text-emerald-400"></i> Tu Cuenta Cliente
           </h3>
           <button onclick="closeAuthModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
         <div class="space-y-3">
-          <button type="button" onclick="handleGoogleSignIn()" class="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs flex items-center justify-center gap-3 shadow-lg transition-all active:scale-[0.98]">
+          <button type="button" onclick="handleGoogleSignInClient()" class="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs flex items-center justify-center gap-3 shadow-lg transition-all active:scale-[0.98]">
             <svg class="w-4 h-4" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
             </svg>
-            <span>Iniciar Sesión con Google</span>
+            <span>Continuar con Google</span>
           </button>
-
-          <div class="flex items-center gap-2 my-2">
-            <hr class="flex-1 border-slate-800">
-            <span class="text-[10px] text-slate-500 uppercase font-semibold">o ingresar celular</span>
-            <hr class="flex-1 border-slate-800">
-          </div>
         </div>
-
-        <form onsubmit="handleSaveAuthUser(event)" class="space-y-3.5 text-xs">
-          <div>
-            <label class="block font-semibold text-slate-300 mb-1">Tu Nombre</label>
-            <input type="text" id="auth-name" required placeholder="Ej: Carlos Gómez"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-semibold outline-none focus:border-emerald-500">
-          </div>
-
-          <div>
-            <label class="block font-semibold text-slate-300 mb-1">Número WhatsApp (+57)</label>
-            <input type="tel" id="auth-phone" required placeholder="3101234567"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-semibold outline-none focus:border-emerald-500">
-          </div>
-
-          <button type="submit" class="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md">
-            <i class="fa-solid fa-check"></i> Guardar Datos
-          </button>
-
-          <div id="logout-btn-container" class="hidden pt-2 border-t border-slate-800 text-center">
-            <button type="button" onclick="handleSignOut()" class="text-xs text-rose-400 hover:text-rose-300 font-bold">
-              <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
-            </button>
-          </div>
-        </form>
       </div>
     </div>
 
-    <!-- TOAST NOTIFICACIONES DE ALERTA -->
+    <!-- TOAST NOTIFICACIONES -->
     <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-emerald-500/40 shadow-xl flex items-center gap-3">
       <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
       <span id="toast-message" class="flex-1">Operación exitosa</span>
@@ -460,455 +365,68 @@
 
   </div>
 
-  <!-- JAVASCRIPT LOGIC PWA CLIENTE CON RASTREO EN VIVO Y MAPA EN VIVO -->
+  <!-- JAVASCRIPT APP CLIENTE -->
   <script>
-    let activeTrackOrderId = localStorage.getItem('active_order_id') || localStorage.getItem('ubavoy_active_order_id') || null;
-    let leafletMap = null;
-    let deliveryCoords = { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
-    let currentOrderData = null;
-    let trackingUnsubscribe = null;
+    const UBATE_CENTER = { lat: 5.3081, lng: -73.8144 };
+    let selectedPrice = 5000;
+    let selectedCoords = { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
+    let mapInstance = null;
+    let mapMarker = null;
 
-    let savedAddresses = JSON.parse(localStorage.getItem('ubavoy_saved_addresses') || JSON.stringify([
-      { id: 'addr_1', tag: 'Casa', icon: 'fa-house', address: 'Barrio Santa Bárbara, Calle 6 #7-12', detail: 'Apt 201', coords: { lat: 5.3081, lng: -73.8144 } },
-      { id: 'addr_2', tag: 'Trabajo', icon: 'fa-briefcase', address: 'Centro Ubaté, Carrera 7 #8-15', detail: 'Oficina 4', coords: { lat: 5.3110, lng: -73.8130 } }
-    ]));
-    let activeAddressId = savedAddresses[0] ? savedAddresses[0].id : null;
+    let liveTrackingMapInstance = null;
+    let activeOrderUnsubscribe = null;
 
-    let currentUser = JSON.parse(localStorage.getItem('ubavoy_current_user') || JSON.stringify({
+    let currentClient = JSON.parse(localStorage.getItem('ubavoy_client_user') || JSON.stringify({
       uid: null,
       email: null,
-      photoURL: null,
+      name: 'Cliente UbaVoy',
       phone: '3101234567',
-      name: 'Usuario Cliente',
-      role: 'client'
+      photoURL: null
     }));
 
+    let savedAddresses = JSON.parse(localStorage.getItem('ubavoy_saved_addresses') || JSON.stringify([
+      { title: '🏠 Casa (Centro)', address: 'Carrera 7 # 8-45', lat: 5.3081, lng: -73.8144 },
+      { title: '💼 Trabajo / Droguería', address: 'Calle 9 # 6-20', lat: 5.3090, lng: -73.8130 }
+    ]));
+
     document.addEventListener('DOMContentLoaded', () => {
+      renderSavedAddresses();
       updateHeaderUserUI();
       registerServiceWorker();
-      renderSavedAddressesPills();
-      initLeafletMapUberStyle();
-      initAuthListener();
-      subscribeFirestoreRealtime();
 
-      if (activeTrackOrderId) {
-        trackClientOrder(activeTrackOrderId);
-      }
-
-      // SUBMIT CON ESCRITURA Y SUSCRIPCIÓN RASTREO EN VIVO
-      const orderForm = document.getElementById('orderForm') || document.getElementById('order-form');
-      if (orderForm) {
-        orderForm.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          console.log("🔥 Enviando pedido directamente a Firestore...");
-
-          const taskDesc = document.getElementById('taskDesc')?.value || document.getElementById('input-description')?.value || 'Mandado Exprés';
-          const deliveryAddress = document.getElementById('deliveryAddress')?.value || document.getElementById('input-destination')?.value || 'Ubaté Centro';
-          const clientPhone = document.getElementById('clientPhone')?.value || document.getElementById('input-phone')?.value?.replace(/[^0-9]/g, '') || '3101234567';
-          const price = parseInt(document.getElementById('input-price')?.value) || 5000;
-
-          try {
-            const newOrder = {
-              client_phone: clientPhone,
-              client_uid: currentUser ? currentUser.uid : null,
-              task_description: taskDesc,
-              delivery_address: deliveryAddress,
-              delivery_coords: deliveryCoords || window.currentCoords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng },
-              estimated_price: price,
-              status: 'pending',
-              delivery_pin: Math.floor(1000 + Math.random() * 9000).toString(),
-              created_at: new Date().toISOString()
-            };
-
-            let docRefId = '';
-            if (typeof db !== 'undefined' && db !== null) {
-              const docRef = await db.collection("orders").add(newOrder);
-              docRefId = docRef.id;
-            } else if (typeof firebase !== 'undefined' && firebase.firestore) {
-              const docRef = await firebase.firestore().collection("orders").add(newOrder);
-              docRefId = docRef.id;
-            } else {
-              throw new Error("Base de datos Firestore no disponible.");
-            }
-
-            console.log("✅ Mandado guardado en Firestore con ID:", docRefId);
-            localStorage.setItem('active_order_id', docRefId);
-            localStorage.setItem('ubavoy_active_order_id', docRefId);
-            
-            alert("🎉 ¡Mandado solicitado con éxito en UbaVoy!\nID de Seguimiento: " + docRefId);
-            
-            orderForm.reset();
-            const phoneInput = document.getElementById('clientPhone') || document.getElementById('input-phone');
-            if (phoneInput) phoneInput.value = currentUser.phone || '';
-            renderSavedAddressesPills();
-
-            // INICIAR RASTREO EN VIVO INMEDIATO
-            if (docRefId) trackClientOrder(docRefId);
-
-          } catch (err) {
-            console.error("❌ Error guardando en Firestore:", err);
-            alert("Error al conectar con la base de datos: " + err.message);
-          }
-        });
+      const lastOrderId = localStorage.getItem('ubavoy_active_order_id');
+      if (lastOrderId) {
+        trackClientOrder(lastOrderId);
       }
     });
 
-    // LISTENER ONSNAPSHOT DE ORDEN ACTIVA
-    function trackClientOrder(orderId) {
-      if (!orderId) return;
-      activeTrackOrderId = orderId;
-      localStorage.setItem('active_order_id', orderId);
-      localStorage.setItem('ubavoy_active_order_id', orderId);
-
-      const trackingSec = document.getElementById('tracking-section');
-      if (trackingSec) trackingSec.classList.remove('hidden');
-
-      if (trackingUnsubscribe) trackingUnsubscribe();
-
-      const docRef = (typeof db !== 'undefined' && db !== null) ? db.collection("orders").doc(orderId) : firebase.firestore().collection("orders").doc(orderId);
-
-      trackingUnsubscribe = docRef.onSnapshot((docSnap) => {
-        if (!docSnap.exists) return;
-        currentOrderData = docSnap.data();
-        currentOrderData.id = docSnap.id;
-        
-        const pinDisplay = document.getElementById('deliveryPinDisplay') || document.getElementById('track-delivery-pin');
-        if (pinDisplay) pinDisplay.innerText = currentOrderData.delivery_pin || '----';
-
-        const taskDisplay = document.getElementById('activeOrderTask') || document.getElementById('track-description');
-        if (taskDisplay) taskDisplay.innerText = currentOrderData.task_description || 'Mandado Exprés';
-
-        const priceDisplay = document.getElementById('activeOrderPrice') || document.getElementById('track-price');
-        if (priceDisplay) priceDisplay.innerText = `$${(currentOrderData.estimated_price || 5000).toLocaleString()} COP`;
-
-        updateProgressBar(currentOrderData.status);
-        updateDriverAssignedUI(currentOrderData);
-      }, (err) => {
-        console.error("Error en Snapshot de Rastreo:", err);
-      });
-    }
-
-    function updateProgressBar(status) {
-      const progressBar = document.getElementById('progress-bar');
-      const lblPending = document.getElementById('step-lbl-pending');
-      const lblAssigned = document.getElementById('step-lbl-assigned');
-      const lblTransit = document.getElementById('step-lbl-transit');
-      const lblCompleted = document.getElementById('step-lbl-completed');
-
-      [lblPending, lblAssigned, lblTransit, lblCompleted].forEach(l => { if (l) l.className = 'text-slate-500 font-semibold'; });
-
-      if (!status || status === 'pending') {
-        if (progressBar) progressBar.style.width = '25%';
-        if (lblPending) lblPending.className = 'text-emerald-400 font-bold';
-      } else if (status === 'assigned') {
-        if (progressBar) progressBar.style.width = '50%';
-        if (lblAssigned) lblAssigned.className = 'text-emerald-400 font-bold';
-      } else if (status === 'in_transit') {
-        if (progressBar) progressBar.style.width = '75%';
-        if (lblTransit) lblTransit.className = 'text-emerald-400 font-bold';
-      } else if (status === 'completed') {
-        if (progressBar) progressBar.style.width = '100%';
-        if (lblCompleted) lblCompleted.className = 'text-emerald-400 font-bold';
-      }
-    }
-
-    function updateDriverAssignedUI(order) {
-      const driverCard = document.getElementById('driver-assigned-card');
-      if (!driverCard) return;
-
-      if (order.status === 'assigned' || order.status === 'in_transit' || order.status === 'completed') {
-        driverCard.classList.remove('hidden');
-        const driverName = order.driver_name || (order.driverInfo ? order.driverInfo.name : 'Carlos Domiciliario');
-        const driverPhone = order.driver_phone || (order.driverInfo ? order.driverInfo.phone : '3100000000');
-        const driverVehicle = order.driver_vehicle || (order.driverInfo ? order.driverInfo.vehicle : 'Moto FZ 150 - ABC-123');
-
-        const nameEl = document.getElementById('assigned-driver-name');
-        const vehicleEl = document.getElementById('assigned-driver-vehicle');
-        const waBtn = document.getElementById('btn-whatsapp-driver');
-
-        if (nameEl) nameEl.innerText = driverName;
-        if (vehicleEl) vehicleEl.innerText = driverVehicle;
-        if (waBtn) {
-          const cleanPhone = driverPhone.replace(/[^0-9]/g, '');
-          const text = encodeURIComponent(`Hola ${driverName}, soy el cliente del pedido en UbaVoy.`);
-          waBtn.href = `https://wa.me/57${cleanPhone}?text=${text}`;
-        }
-      } else {
-        driverCard.classList.add('hidden');
-      }
-    }
-
-    function triggerOpenLiveMapModal() {
-      if (!currentOrderData) {
-        showToast('No hay una orden activa seleccionada', 'error');
-        return;
-      }
-      const coords = currentOrderData.delivery_coords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
-      openLiveMapModal(coords, currentOrderData.driver_coords);
-    }
-
-    function openLiveMapModal(coords, driverCoords) {
-      const modal = document.getElementById('live-map-modal');
-      if (!modal) return;
-      modal.classList.remove('hidden');
-
-      setTimeout(() => {
-        if (!window.liveMapInstance) {
-          window.liveMapInstance = L.map('live-tracking-map', { zoomControl: false }).setView([coords.lat, coords.lng], 15);
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            maxZoom: 19,
-            subdomains: 'abcd',
-            attribution: '&copy; CartoDB &copy; OpenStreetMap'
-          }).addTo(window.liveMapInstance);
-        } else {
-          window.liveMapInstance.setView([coords.lat, coords.lng], 15);
-        }
-
-        if (window.liveMapDeliveryMarker) window.liveMapInstance.removeLayer(window.liveMapDeliveryMarker);
-        if (window.liveMapDriverMarker) window.liveMapInstance.removeLayer(window.liveMapDriverMarker);
-
-        // Marker Punto de Entrega
-        window.liveMapDeliveryMarker = L.marker([coords.lat, coords.lng]).addTo(window.liveMapInstance)
-          .bindPopup("<b>📍 Punto de Entrega</b>").openPopup();
-
-        // Marker Domiciliario (Posición real o simulada para prueba)
-        const drvLat = driverCoords ? driverCoords.lat : (coords.lat + 0.002);
-        const drvLng = driverCoords ? driverCoords.lng : (coords.lng + 0.002);
-        
-        const driverIcon = L.divIcon({
-          html: '<div style="background:#f59e0b;color:#0f172a;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid white;font-size:16px;box-shadow:0 0 10px rgba(245,158,11,0.8)"><i class="fa-solid fa-motorcycle"></i></div>',
-          className: 'driver-live-icon',
-          iconSize: [32, 32],
-          iconAnchor: [16, 16]
-        });
-
-        window.liveMapDriverMarker = L.marker([drvLat, drvLng], { icon: driverIcon }).addTo(window.liveMapInstance)
-          .bindPopup("<b>🛵 Domiciliario UbaVoy</b>");
-
-        window.liveMapInstance.invalidateSize();
-      }, 200);
-    }
-
-    function closeLiveMapModal() {
-      const modal = document.getElementById('live-map-modal');
-      if (modal) modal.classList.add('hidden');
-    }
-
-    function clearActiveTracking() {
-      activeTrackOrderId = null;
-      localStorage.removeItem('active_order_id');
-      localStorage.removeItem('ubavoy_active_order_id');
-      if (trackingUnsubscribe) trackingUnsubscribe();
-      const trackingSec = document.getElementById('tracking-section');
-      if (trackingSec) trackingSec.classList.add('hidden');
-    }
-
-    function initAuthListener() {
-      if (typeof auth !== 'undefined' && auth !== null) {
-        auth.onAuthStateChanged((user) => {
-          if (user) {
-            currentUser.uid = user.uid;
-            currentUser.email = user.email;
-            currentUser.name = user.displayName || currentUser.name;
-            currentUser.photoURL = user.photoURL;
-
-            localStorage.setItem('ubavoy_current_user', JSON.stringify(currentUser));
-            updateHeaderUserUI();
-
-            if (typeof db !== 'undefined' && db !== null) {
-              db.collection('users').doc(user.uid).set({
-                uid: user.uid,
-                email: user.email,
-                name: currentUser.name,
-                photoURL: user.photoURL,
-                role: 'client',
-                last_login: new Date().toISOString()
-              }, { merge: true });
-            }
-          } else {
-            currentUser.uid = null;
-            currentUser.email = null;
-            currentUser.photoURL = null;
-            updateHeaderUserUI();
-          }
-        });
-      }
-    }
-
-    async function handleGoogleSignIn() {
+    async function handleGoogleSignInClient() {
       try {
         showToast('Iniciando sesión con Google...');
         const result = await signInWithGoogle();
         const user = result.user;
-        
-        currentUser.uid = user.uid;
-        currentUser.email = user.email;
-        currentUser.name = user.displayName;
-        currentUser.photoURL = user.photoURL;
 
-        localStorage.setItem('ubavoy_current_user', JSON.stringify(currentUser));
+        currentClient.uid = user.uid;
+        currentClient.email = user.email;
+        currentClient.name = user.displayName;
+        currentClient.photoURL = user.photoURL;
+
+        localStorage.setItem('ubavoy_client_user', JSON.stringify(currentClient));
         updateHeaderUserUI();
         closeAuthModal();
         showToast(`¡Bienvenido ${user.displayName}!`);
-        subscribeFirestoreRealtime();
       } catch (err) {
-        console.error("Error Google Auth:", err);
+        console.error("Error Google Auth Client:", err);
         showToast('No se pudo iniciar sesión con Google', 'error');
-      }
-    }
-
-    async function handleSignOut() {
-      try {
-        await signOutUser();
-        currentUser.uid = null;
-        currentUser.email = null;
-        currentUser.photoURL = null;
-        localStorage.setItem('ubavoy_current_user', JSON.stringify(currentUser));
-        updateHeaderUserUI();
-        closeAuthModal();
-        showToast('Sesión cerrada');
-      } catch (err) {}
-    }
-
-    function renderSavedAddressesPills() {
-      const container = document.getElementById('saved-addresses-pills');
-      if (!container) return;
-
-      container.innerHTML = savedAddresses.map(addr => {
-        const isActive = addr.id === activeAddressId;
-        const activeClass = "bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow-lg shadow-emerald-500/20";
-        const inactiveClass = "bg-slate-900/90 text-slate-300 font-semibold border-slate-800 hover:border-slate-700";
-
-        return `
-          <button onclick="selectSavedAddress('${addr.id}')"
-            class="px-3 py-1.5 rounded-xl text-xs border flex items-center gap-1.5 shrink-0 transition-all active:scale-95 ${isActive ? activeClass : inactiveClass}">
-            <i class="fa-solid ${addr.icon || 'fa-location-dot'}"></i>
-            <span>${escapeHtml(addr.tag)}</span>
-          </button>
-        `;
-      }).join('');
-
-      const activeAddr = savedAddresses.find(a => a.id === activeAddressId);
-      if (activeAddr) {
-        const destInput = document.getElementById('deliveryAddress') || document.getElementById('input-destination');
-        if (destInput) destInput.value = activeAddr.address + (activeAddr.detail ? ` (${activeAddr.detail})` : '');
-        deliveryCoords = activeAddr.coords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
-        if (leafletMap) {
-          leafletMap.setView([deliveryCoords.lat, deliveryCoords.lng], 16);
-          setTimeout(() => leafletMap.invalidateSize(), 200);
-        }
-      }
-    }
-
-    function selectSavedAddress(id) {
-      activeAddressId = id;
-      renderSavedAddressesPills();
-      showToast('📍 Dirección de entrega actualizada');
-    }
-
-    function openAddAddressModal() {
-      document.getElementById('address-modal').classList.remove('hidden');
-    }
-
-    function closeAddAddressModal() {
-      document.getElementById('address-modal').classList.add('hidden');
-    }
-
-    function handleSaveNewAddress(e) {
-      e.preventDefault();
-      const tag = document.getElementById('addr-tag').value;
-      const text = document.getElementById('addr-text').value.trim();
-      const detail = document.getElementById('addr-detail').value.trim();
-
-      if (!text) return;
-      const icon = tag === 'Casa' ? 'fa-house' : tag === 'Trabajo' ? 'fa-briefcase' : 'fa-location-dot';
-
-      const newAddr = {
-        id: 'addr_' + Date.now(),
-        tag,
-        icon,
-        address: text,
-        detail,
-        coords: deliveryCoords
-      };
-
-      savedAddresses.push(newAddr);
-      activeAddressId = newAddr.id;
-      localStorage.setItem('ubavoy_saved_addresses', JSON.stringify(savedAddresses));
-
-      renderSavedAddressesPills();
-      closeAddAddressModal();
-      showToast('¡Nueva dirección guardada exitosamente!');
-    }
-
-    function initLeafletMapUberStyle() {
-      const mapContainer = document.getElementById('map');
-      if (!mapContainer || typeof L === 'undefined') return;
-
-      try {
-        leafletMap = L.map('map', { zoomControl: false }).setView([UBATE_CENTER.lat, UBATE_CENTER.lng], UBATE_CENTER.zoom);
-
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-          maxZoom: 19,
-          subdomains: 'abcd',
-          attribution: '&copy; CartoDB &copy; OpenStreetMap'
-        }).addTo(leafletMap);
-
-        leafletMap.on('moveend', () => {
-          const center = leafletMap.getCenter();
-          deliveryCoords = { lat: center.lat, lng: center.lng };
-          
-          const pin = document.getElementById('uber-center-pin');
-          if (pin) {
-            pin.classList.remove('bounce-pin');
-            void pin.offsetWidth;
-            pin.classList.add('bounce-pin');
-          }
-        });
-
-        leafletMap.invalidateSize();
-        setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 200);
-
-      } catch (err) {
-        console.warn("Error al inicializar mapa Leaflet:", err);
-      }
-    }
-
-    function useCurrentLocation() {
-      if ('geolocation' in navigator) {
-        showToast('Obteniendo ubicación GPS actual...');
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords;
-            deliveryCoords = { lat: latitude, lng: longitude };
-
-            if (leafletMap) {
-              leafletMap.setView([latitude, longitude], 16);
-              setTimeout(() => leafletMap.invalidateSize(), 200);
-            }
-            showToast('🎯 Mapa centrado en tu ubicación GPS');
-          },
-          () => showToast('No se pudo acceder a la ubicación GPS', 'error'),
-          { enableHighAccuracy: true, timeout: 10000 }
-        );
-      } else {
-        showToast('Navegador no soporta Geolocalización', 'error');
-      }
-    }
-
-    function registerServiceWorker() {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/apps/client/sw.js').catch(() => {});
       }
     }
 
     function updateHeaderUserUI() {
       const avatarImg = document.getElementById('header-user-avatar');
       const userIcon = document.getElementById('header-user-icon');
-      const logoutContainer = document.getElementById('logout-btn-container');
 
-      if (currentUser.photoURL) {
-        avatarImg.src = currentUser.photoURL;
+      if (currentClient.photoURL) {
+        avatarImg.src = currentClient.photoURL;
         avatarImg.classList.remove('hidden');
         userIcon.classList.add('hidden');
       } else {
@@ -916,21 +434,11 @@
         userIcon.classList.remove('hidden');
       }
 
-      if (currentUser.uid) {
-        logoutContainer.classList.remove('hidden');
-      } else {
-        logoutContainer.classList.add('hidden');
-      }
-
-      document.getElementById('header-user-name').innerText = currentUser.name || 'Ingresar';
-      document.getElementById('header-user-phone').innerText = currentUser.email || currentUser.phone || 'Google Auth';
-      const phoneInput = document.getElementById('clientPhone') || document.getElementById('input-phone');
-      if (phoneInput) phoneInput.value = currentUser.phone || '';
+      document.getElementById('header-user-name').innerText = currentClient.name || 'Ingresar';
+      document.getElementById('header-user-phone').innerText = currentClient.phone || 'Google Auth';
     }
 
     function openAuthModal() {
-      document.getElementById('auth-name').value = currentUser.name || '';
-      document.getElementById('auth-phone').value = currentUser.phone || '';
       document.getElementById('auth-modal').classList.remove('hidden');
     }
 
@@ -938,138 +446,218 @@
       document.getElementById('auth-modal').classList.add('hidden');
     }
 
-    async function handleSaveAuthUser(e) {
-      e.preventDefault();
-      const name = document.getElementById('auth-name').value.trim();
-      const phone = document.getElementById('auth-phone').value.trim().replace(/[^0-9]/g, '');
+    function renderSavedAddresses() {
+      const container = document.getElementById('saved-addresses-container');
+      container.innerHTML = savedAddresses.map((item, idx) => `
+        <button type="button" onclick="selectSavedAddress(${idx})"
+          class="flex-shrink-0 bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 rounded-xl px-3 py-2 text-left transition-all max-w-[170px]">
+          <span class="text-xs font-bold text-emerald-400 block truncate">${escapeHtml(item.title)}</span>
+          <span class="text-[10px] text-slate-400 truncate block">${escapeHtml(item.address)}</span>
+        </button>
+      `).join('');
+    }
 
-      if (!name || !phone) {
-        showToast('Nombre y celular son requeridos', 'error');
+    function selectSavedAddress(index) {
+      const item = savedAddresses[index];
+      if (!item) return;
+
+      document.getElementById('deliveryAddress').value = item.address;
+      selectedCoords = { lat: item.lat, lng: item.lng };
+      showToast(`📍 Seleccionado: ${item.title}`);
+    }
+
+    function saveCurrentAsFavoriteAddress() {
+      const addr = document.getElementById('deliveryAddress').value.trim();
+      if (!addr) {
+        showToast('Escribe primero una dirección para guardar', 'error');
         return;
       }
 
-      currentUser.name = name;
-      currentUser.phone = phone;
-      localStorage.setItem('ubavoy_current_user', JSON.stringify(currentUser));
+      const title = prompt('Ingresa un nombre para esta dirección favorita (Ej: Casa, Oficina):', 'Favorita Ubaté');
+      if (!title) return;
 
-      if (typeof db !== 'undefined' && db !== null) {
-        try {
-          const docId = currentUser.uid || phone;
-          await db.collection('users').doc(docId).set(currentUser, { merge: true });
-        } catch (err) {}
-      }
+      savedAddresses.push({
+        title: title,
+        address: addr,
+        lat: selectedCoords.lat,
+        lng: selectedCoords.lng
+      });
 
-      updateHeaderUserUI();
-      closeAuthModal();
-      showToast(`¡Perfil de ${name} guardado!`);
-      subscribeFirestoreRealtime();
+      localStorage.setItem('ubavoy_saved_addresses', JSON.stringify(savedAddresses));
+      renderSavedAddresses();
+      showToast('✅ ¡Dirección favorita guardada!');
     }
 
-    // CONSULTA Y SUSCRIPCIÓN EN TIEMPO REAL AL HISTORIAL DE MANDADOS
-    function subscribeFirestoreRealtime() {
-      if (typeof db === 'undefined' || db === null) return;
+    function selectPricingZone(zone, price) {
+      selectedPrice = price;
+      document.getElementById('estimatedPriceDisplay').innerText = price.toLocaleString();
 
-      const currentPhone = currentUser ? currentUser.phone : '3101234567';
+      const btnUrban = document.getElementById('btnZoneUrban');
+      const btnPeri = document.getElementById('btnZonePerimeter');
 
-      db.collection('orders')
-        .onSnapshot((snapshot) => {
-          const allOrders = [];
-          snapshot.forEach(doc => {
-            const data = doc.data();
-            data.id = doc.id;
-            allOrders.push(data);
+      if (zone === 'urban') {
+        btnUrban.className = "py-2 px-2.5 rounded-xl border text-center transition-all bg-emerald-950/80 border-emerald-500 text-emerald-300 font-bold text-xs";
+        btnPeri.className = "py-2 px-2.5 rounded-xl border border-slate-700/80 bg-slate-950 text-slate-400 text-center transition-all hover:border-slate-600 text-xs";
+      } else {
+        btnPeri.className = "py-2 px-2.5 rounded-xl border text-center transition-all bg-amber-950/80 border-amber-500 text-amber-300 font-bold text-xs";
+        btnUrban.className = "py-2 px-2.5 rounded-xl border border-slate-700/80 bg-slate-950 text-slate-400 text-center transition-all hover:border-slate-600 text-xs";
+      }
+    }
+
+    function toggleMapModal() {
+      const container = document.getElementById('mapContainerModal');
+      container.classList.toggle('hidden');
+
+      if (!container.classList.contains('hidden') && !mapInstance) {
+        setTimeout(() => {
+          mapInstance = L.map('leafletMap').setView([UBATE_CENTER.lat, UBATE_CENTER.lng], 15);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+          }).addTo(mapInstance);
+
+          mapMarker = L.marker([UBATE_CENTER.lat, UBATE_CENTER.lng], { draggable: true }).addTo(mapInstance);
+
+          mapMarker.on('dragend', function (e) {
+            const position = mapMarker.getLatLng();
+            selectedCoords = { lat: position.lat, lng: position.lng };
+            updateCoordsText(selectedCoords);
           });
-          renderClientHistory(allOrders);
-        }, (err) => {
-          console.error("Error suscribiendo al historial de Firestore:", err);
-        });
+
+          mapInstance.on('click', function (e) {
+            mapMarker.setLatLng(e.latlng);
+            selectedCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
+            updateCoordsText(selectedCoords);
+          });
+        }, 200);
+      }
     }
 
-    function renderClientHistory(allOrders) {
-      const feed = document.getElementById('client-history-feed');
-      const badge = document.getElementById('client-total-orders-badge');
-      
-      const currentPhone = currentUser ? currentUser.phone : '';
-      const currentUid = currentUser ? currentUser.uid : '';
+    function updateCoordsText(coords) {
+      const el = document.getElementById('mapSelectedCoordsText');
+      if (el) el.innerText = `Punto Seleccionado (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)})`;
+    }
 
-      const myOrders = allOrders.filter(o => 
-        (o.client_phone && o.client_phone === currentPhone) ||
-        (o.client_uid && o.client_uid === currentUid) ||
-        (o.customerPhone && o.customerPhone === currentPhone)
-      );
+    function confirmMapLocation() {
+      document.getElementById('mapContainerModal').classList.add('hidden');
+      showToast('📍 Ubicación en mapa confirmada');
+    }
 
-      myOrders.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-      badge.innerText = `${myOrders.length} Pedidos`;
+    async function handleCreateOrderSubmit(e) {
+      e.preventDefault();
 
-      if (myOrders.length === 0) {
-        feed.innerHTML = `
-          <div class="glass-card rounded-xl p-4 text-center text-xs text-slate-400">
-            No tienes pedidos registrados en Firestore.
-          </div>
-        `;
+      const clientPhone = document.getElementById('clientPhone').value.trim().replace(/[^0-9]/g, '');
+      const taskDescription = document.getElementById('taskDescription').value.trim();
+      const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
+
+      if (!clientPhone || clientPhone.length < 7) {
+        showToast('Por favor ingresa un número celular válido.', 'error');
+        return;
+      }
+      if (!taskDescription) {
+        showToast('Por favor describe tu mandado.', 'error');
+        return;
+      }
+      if (!deliveryAddress) {
+        showToast('Por favor ingresa la dirección de entrega.', 'error');
         return;
       }
 
-      feed.innerHTML = myOrders.map(order => {
-        const desc = order.task_description || order.description || 'Mandado UbaVoy';
-        const addr = order.delivery_address || order.destination || 'Ubaté';
-        const price = order.estimated_price || order.estimatedPrice || 0;
+      const generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
 
-        return `
-          <div class="glass-card rounded-xl p-3.5 text-xs space-y-2 border border-slate-800 hover:border-slate-700 transition-all">
-            <div class="flex justify-between items-center">
-              <span class="font-mono text-emerald-400 font-bold">#${order.id}</span>
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                order.status === 'pending' ? 'bg-amber-950 text-amber-400 border border-amber-800' :
-                order.status === 'assigned' ? 'bg-blue-950 text-blue-400 border border-blue-800' :
-                'bg-emerald-950 text-emerald-400 border border-emerald-800'
-              }">
-                ${(order.status || 'pending').toUpperCase()}
-              </span>
-            </div>
-            <p class="font-semibold text-slate-200 line-clamp-2">${escapeHtml(desc)}</p>
-            
-            <div class="flex justify-between text-slate-400 text-[11px] items-center border-t border-slate-800/80 pt-2">
-              <span class="truncate max-w-[170px]"><i class="fa-solid fa-location-dot text-emerald-400"></i> ${escapeHtml(addr)}</span>
-              <span class="font-bold text-amber-400">$${price.toLocaleString()} COP</span>
-            </div>
+      const newOrder = {
+        client_phone: clientPhone,
+        client_name: currentClient.name || 'Cliente UbaVoy',
+        task_description: taskDescription,
+        delivery_address: deliveryAddress,
+        delivery_coords: selectedCoords,
+        delivery_pin: generatedPin,
+        estimated_price: selectedPrice,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      };
 
-            ${order.delivery_pin ? `
-              <div class="text-[10px] text-emerald-400 bg-emerald-950/60 rounded px-2 py-1 flex items-center justify-between font-mono">
-                <span>PIN Entrega:</span>
-                <strong class="font-black tracking-widest text-emerald-300 text-xs">${order.delivery_pin}</strong>
-              </div>
-            ` : ''}
+      console.log("🔥 Guardando orden en Firestore (ubavoy)...", newOrder);
 
-            <button onclick="repeatOrder('${order.id}')"
-              class="w-full py-1.5 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-400 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all">
-              <i class="fa-solid fa-rotate-right"></i> Repetir Mandado
-            </button>
-          </div>
-        `;
-      }).join('');
+      try {
+        if (typeof db !== 'undefined' && db !== null) {
+          const docRef = await db.collection('orders').add(newOrder);
+          console.log("✅ Orden agregada a Firestore id:", docRef.id);
+          
+          localStorage.setItem('ubavoy_active_order_id', docRef.id);
+          trackClientOrder(docRef.id);
+        }
+
+        document.getElementById('orderForm').reset();
+        showToast(`🎉 Mandado enviado a repartidores. PIN: ${generatedPin}`);
+      } catch (err) {
+        console.error("Error al crear la orden en Firestore:", err);
+        showToast('No se pudo enviar la orden a Firestore', 'error');
+      }
     }
 
-    function repeatOrder(orderId) {
-      if (!db) return;
-      db.collection('orders').doc(orderId).get().then(doc => {
-        if (doc.exists) {
-          const order = doc.data();
-          const descInput = document.getElementById('taskDesc') || document.getElementById('input-description');
-          const destInput = document.getElementById('deliveryAddress') || document.getElementById('input-destination');
-          if (descInput) descInput.value = order.task_description || '';
-          if (destInput) destInput.value = order.delivery_address || '';
-          document.getElementById('input-price').value = order.estimated_price || 5000;
+    function trackClientOrder(orderId) {
+      if (!orderId || typeof db === 'undefined' || db === null) return;
 
-          if (order.delivery_coords) {
-            deliveryCoords = order.delivery_coords;
-            if (leafletMap) leafletMap.setView([deliveryCoords.lat, deliveryCoords.lng], 16);
-          }
+      if (activeOrderUnsubscribe) activeOrderUnsubscribe();
 
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-          showToast('🔄 Mandado precargado en el formulario. ¡Presiona Solicitar!');
+      activeOrderUnsubscribe = db.collection('orders').doc(orderId).onSnapshot((docSnap) => {
+        if (!docSnap.exists()) return;
+        const order = docSnap.data();
+
+        const card = document.getElementById('active-order-tracking-card');
+        card.classList.remove('hidden');
+
+        document.getElementById('activeOrderIdDisplay').innerText = `#${docSnap.id.substring(0, 6)}`;
+        document.getElementById('activeOrderTask').innerText = order.task_description || 'Mandado Exprés';
+        document.getElementById('activeOrderAddress').innerText = order.delivery_address || 'Ubaté';
+        document.getElementById('activeOrderPrice').innerText = `$${(order.estimated_price || 5000).toLocaleString()} COP`;
+        document.getElementById('deliveryPinDisplay').innerText = order.delivery_pin || '----';
+
+        const badge = document.getElementById('activeOrderBadgeStatus');
+        const driverCard = document.getElementById('assigned-driver-card');
+
+        const st = (order.status || 'pending').toLowerCase();
+        if (st === 'pending') {
+          badge.className = "text-[9px] uppercase px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800 animate-pulse";
+          badge.innerText = "🔍 Buscando Domiciliario...";
+          driverCard.classList.add('hidden');
+        } else if (st === 'assigned' || st === 'in_transit') {
+          badge.className = "text-[9px] uppercase px-2 py-0.5 rounded-full bg-sky-950 text-sky-400 border border-sky-800";
+          badge.innerText = "🛵 Domiciliario en Camino";
+
+          driverCard.classList.remove('hidden');
+          document.getElementById('driver-assigned-name').innerText = order.driver_name || 'Carlos Gómez';
+          document.getElementById('driver-assigned-vehicle').innerText = order.driver_vehicle || 'Moto FZ 150';
+          document.getElementById('driver-whatsapp-link').href = `https://wa.me/57${(order.driver_phone || '3100000000').replace(/[^0-9]/g, '')}`;
+        } else if (st === 'completed') {
+          badge.className = "text-[9px] uppercase px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800";
+          badge.innerText = "✅ Mandado Entregado";
+          driverCard.classList.add('hidden');
+          localStorage.removeItem('ubavoy_active_order_id');
         }
       });
+    }
+
+    function toggleLiveTrackingMapModal() {
+      const modal = document.getElementById('live-tracking-modal');
+      modal.classList.toggle('hidden');
+
+      if (!modal.classList.contains('hidden') && !liveTrackingMapInstance) {
+        setTimeout(() => {
+          liveTrackingMapInstance = L.map('leafletLiveTrackingMap').setView([UBATE_CENTER.lat, UBATE_CENTER.lng], 15);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(liveTrackingMapInstance);
+
+          L.marker([UBATE_CENTER.lat, UBATE_CENTER.lng]).addTo(liveTrackingMapInstance).bindPopup("Cliente (Entrega)").openPopup();
+          L.marker([UBATE_CENTER.lat + 0.003, UBATE_CENTER.lng + 0.003]).addTo(liveTrackingMapInstance).bindPopup("Domiciliario (En Camino)");
+        }, 200);
+      }
+    }
+
+    function registerServiceWorker() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      }
     }
 
     function showToast(message, type = 'success') {
@@ -1082,9 +670,6 @@
       if (type === 'error') {
         toastIcon.className = "fa-solid fa-circle-exclamation text-rose-400 text-base";
         toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-rose-500/50 shadow-2xl flex items-center gap-3';
-      } else if (type === 'warning') {
-        toastIcon.className = "fa-solid fa-triangle-exclamation text-amber-400 text-base";
-        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-amber-500/50 shadow-2xl flex items-center gap-3';
       } else {
         toastIcon.className = "fa-solid fa-circle-check text-emerald-400 text-base";
         toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-emerald-500/40 shadow-2xl flex items-center gap-3';

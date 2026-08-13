@@ -50,8 +50,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   
-  <!-- Shared Firebase Config File -->
+  <!-- Shared Firebase Config & PWA Installer Engine -->
   <script src="/shared/firebase_config.js"></script>
+  <script src="/shared/pwa_installer.js"></script>
 
   <style>
     body {
@@ -131,6 +132,15 @@
         </div>
       </button>
     </header>
+
+    <!-- BANNER DE INSTALACIÓN PWA PERMANENTE UNIVERSAL -->
+    <div class="px-4 pt-3 pb-0">
+      <button id="pwaInstallBtnDriver" onclick="installPwaApp('driver')"
+        class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-display font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-95">
+        <i class="fa-solid fa-mobile-screen-button text-sm"></i>
+        <span>📲 Instalar App Repartidor en mi Celular</span>
+      </button>
+    </div>
 
     <!-- MAIN CONTENT DOMICILIARIO -->
     <main class="flex-1 px-4 py-4 space-y-4">
@@ -264,7 +274,6 @@
         </div>
 
         <form onsubmit="handleSendRechargeReceipt(event)" class="space-y-3.5 text-xs">
-          <!-- SELECCIÓN DE PAQUETE -->
           <div>
             <label class="block font-semibold text-slate-200 mb-1">Selecciona tu Paquete:</label>
             <div class="grid grid-cols-1 gap-2">
@@ -294,13 +303,11 @@
             </div>
           </div>
 
-          <!-- INFORMACIÓN DE TRANSFERENCIA -->
           <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 space-y-1">
             <p class="text-slate-300"><strong>Nequi / Daviplata:</strong> <span class="text-amber-400 font-bold font-mono">3101234567</span></p>
             <p class="text-slate-400"><strong>Titular:</strong> Central UbaVoy Ubaté</p>
           </div>
 
-          <!-- COMPROBANTE LINK / CAPTURA -->
           <div>
             <label class="block font-semibold text-slate-200 mb-1">Captura de Comprobante / URL:</label>
             <input type="text" id="recharge-receipt-url" placeholder="Ej: https://imgur.com/x o Número Nequi Ref"
@@ -352,7 +359,6 @@
           <button onclick="closeAuthModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
-        <!-- BOTÓN GOOGLE AUTH -->
         <div class="space-y-3">
           <button type="button" onclick="handleGoogleSignInDriver()" class="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs flex items-center justify-center gap-3 shadow-lg transition-all active:scale-[0.98]">
             <svg class="w-4 h-4" viewBox="0 0 24 24">
@@ -405,7 +411,7 @@
 
   </div>
 
-  <!-- JAVASCRIPT DOMICILIARIO CON MOTOR DE AUDIO EN BUCLE (SUSTAINED ALARM ENGINE) -->
+  <!-- JAVASCRIPT DOMICILIARIO CON PWA INSTALL PROMPT & SCREEN-OFF PUSH NOTIFICATIONS -->
   <script>
     let isAvailable = false;
     let unsubscribeOrders = null;
@@ -446,7 +452,6 @@
       startDriverFirestoreRealtime();
     });
 
-    // 1. INICIALIZADOR DE MOTOR DE AUDIO WEB API
     function initAudioEngine() {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -456,23 +461,37 @@
       }
     }
 
-    // 2. GENERADOR DE ALERTA SOSTENIDA PÍ-PÍ-PÍ (CADA 500ms CON VIBRACIÓN MÓVIL)
     function startSustainedAlarm(order) {
       initAudioEngine();
-      if (alarmTimer) return; // Ya está sonando el bucle
+      if (alarmTimer) return;
 
       console.log("🚨 Iniciando alarma sostenida Pí-Pí-Pí...");
 
-      // Notificación Push inicial si está minimizado
+      // Notificación Push inicial con pantalla apagada
       if ("Notification" in window && Notification.permission === "granted") {
         try {
           const taskDesc = order ? (order.task_description || order.description || 'Mandado Exprés') : 'Nuevo Mandado Libre';
           const addr = order ? (order.delivery_address || order.destination || 'Ubaté Centro') : 'Ubaté';
-          new Notification("🚨 ¡NUEVO MANDADO EN UBATÉ!", {
-            body: `${taskDesc} - ${addr}`,
-            icon: "/icon-192.svg",
-            vibrate: [250, 100, 250]
-          });
+          
+          if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.ready.then(registration => {
+              registration.showNotification("🚨 ¡NUEVO MANDADO EN UBATÉ!", {
+                body: `${taskDesc} - ${addr}`,
+                icon: "/icon-192.svg",
+                badge: "/icon-192.svg",
+                vibrate: [500, 200, 500, 200, 1000],
+                tag: 'new-order-alert',
+                renotify: true,
+                data: { url: '/apps/driver/' }
+              });
+            });
+          } else {
+            new Notification("🚨 ¡NUEVO MANDADO EN UBATÉ!", {
+              body: `${taskDesc} - ${addr}`,
+              icon: "/icon-192.svg",
+              vibrate: [500, 200, 500]
+            });
+          }
         } catch (e) {}
       }
 
@@ -481,7 +500,6 @@
           if (!audioCtx) return;
           if (audioCtx.state === 'suspended') audioCtx.resume();
 
-          // Tono 1 (Pí - Frecuencia 950Hz por 250ms)
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
           osc.type = 'square';
@@ -581,10 +599,14 @@
       }
     }
 
-    // 3. INICIO DE SESIÓN CON GOOGLE Y VALIDACIÓN ESTRICTA DE PRE-APROBACIÓN POR EMAIL
     async function handleGoogleSignInDriver() {
       try {
         showToast('Iniciando sesión con Google...');
+
+        if ("Notification" in window && Notification.permission !== "granted") {
+          Notification.requestPermission();
+        }
+
         const result = await signInWithGoogle();
         const user = result.user;
         const email = (user.email || '').toLowerCase().trim();
@@ -709,7 +731,6 @@
       startDriverFirestoreRealtime();
     }
 
-    // 4. ENVÍO DE COMPROBANTE DE RECARGA CON PAQUETES PREPAGO
     async function handleSendRechargeReceipt(e) {
       e.preventDefault();
       const selectedPkgRadio = document.querySelector('input[name="recharge_package"]:checked');
