@@ -72,18 +72,31 @@
       border-bottom: 1px solid rgba(245, 158, 11, 0.25);
     }
 
-    /* BUCLE DE PARPADEO Y PULSO DE ALERTA NEÓN CONTINUA */
-    @keyframes alarmPulseKeyframes {
-      0% { background-color: rgba(16, 185, 129, 0.5); border-color: #10b981; box-shadow: 0 0 30px #10b981; }
-      50% { background-color: rgba(245, 158, 11, 0.5); border-color: #f59e0b; box-shadow: 0 0 30px #f59e0b; }
-      100% { background-color: rgba(16, 185, 129, 0.5); border-color: #10b981; box-shadow: 0 0 30px #10b981; }
+    /* BUCLE DE ALERTA FLASH NEÓN & ROJO ALERTA IMPOSIBLE DE IGNORAR */
+    @keyframes alarmFlash {
+      0% { 
+        background-color: rgba(0, 255, 136, 0.6) !important; 
+        border-color: #00ff88 !important; 
+        box-shadow: 0 0 35px #00ff88 !important; 
+      }
+      50% { 
+        background-color: rgba(255, 51, 102, 0.6) !important; 
+        border-color: #ff3366 !important; 
+        box-shadow: 0 0 35px #ff3366 !important; 
+      }
+      100% { 
+        background-color: rgba(0, 255, 136, 0.6) !important; 
+        border-color: #00ff88 !important; 
+        box-shadow: 0 0 35px #00ff88 !important; 
+      }
     }
-    .alarm-pulse {
-      animation: alarmPulseKeyframes 0.4s infinite alternate;
+
+    .alarm-flash-mode {
+      animation: alarmFlash 0.35s infinite alternate !important;
       border-radius: 1rem;
     }
-    .neon-flash-alert {
-      animation: alarmPulseKeyframes 0.4s infinite alternate;
+    .alarm-pulse {
+      animation: alarmFlash 0.35s infinite alternate !important;
       border-radius: 1rem;
     }
   </style>
@@ -360,6 +373,17 @@
       updateHeaderUserUI();
       registerServiceWorker();
 
+      // DESBLOQUEO AUTOMÁTICO DE AUDIOCONTEXT AL TOCAR CUALQUIER PARTE DE LA PANTALLA
+      const unlockAudio = () => {
+        if (typeof playNewOrderSound === 'function') {
+          playNewOrderSound();
+        }
+        document.removeEventListener('click', unlockAudio);
+        document.removeEventListener('touchstart', unlockAudio);
+      };
+      document.addEventListener('click', unlockAudio);
+      document.addEventListener('touchstart', unlockAudio);
+
       // INICIAR DISPONIBILIDAD Y CONEXIÓN
       isAvailable = true;
       updateAvailabilityUI();
@@ -387,7 +411,7 @@
       }
     }
 
-    // 2. BUCLE CONTINUO DE ALERTA INTERMITENTE (SONIDO + VIBRACIÓN + PARPADEO NEÓN)
+    // 2. BUCLE CONTINUO DE ALERTA INTERMITENTE (SONIDO + VIBRACIÓN VIBRATE([400, 200, 400]) + PARPADEO NEÓN)
     function startAlarmLoop(order) {
       if (alarmIntervalId !== null) return;
 
@@ -399,7 +423,7 @@
           new Notification("🚨 ¡NUEVO MANDADO EN UBATÉ!", {
             body: `${taskDesc} - ${addr}`,
             icon: "/icon-192.svg",
-            vibrate: [300, 200, 300]
+            vibrate: [400, 200, 400]
           });
         } catch (e) {}
       }
@@ -409,22 +433,22 @@
         // a) Beep sonoro / Sirena
         playAlarmSound();
 
-        // b) Vibración Móvil cada 1500ms
-        if ("vibrate" in navigator) {
+        // b) Vibración Móvil Continua cada 1500ms con navigator.vibrate([400, 200, 400])
+        if (navigator.vibrate) {
           try {
-            navigator.vibrate([300, 200, 300]);
+            navigator.vibrate([400, 200, 400]);
           } catch (e) {}
         }
 
-        // c) Toggle Parpadeo Neón Visual
+        // c) Toggle Parpadeo Neón Visual Verde Neón / Rojo Alerta
         toggleNeonAlarmPulse();
 
       }, 1500);
 
       // Disparo inmediato en el instante 0
       playAlarmSound();
-      if ("vibrate" in navigator) {
-        try { navigator.vibrate([300, 200, 300]); } catch (e) {}
+      if (navigator.vibrate) {
+        try { navigator.vibrate([400, 200, 400]); } catch (e) {}
       }
       toggleNeonAlarmPulse();
     }
@@ -436,7 +460,7 @@
       }
 
       // Cancelar vibraciones del sistema
-      if ("vibrate" in navigator) {
+      if (navigator.vibrate) {
         try {
           navigator.vibrate(0);
         } catch (e) {}
@@ -447,24 +471,24 @@
       const header = document.querySelector('header');
       if (container) {
         container.classList.remove('alarm-pulse');
-        container.classList.remove('neon-flash-alert');
+        container.classList.remove('alarm-flash-mode');
       }
       if (header) {
         header.classList.remove('alarm-pulse');
-        header.classList.remove('neon-flash-alert');
+        header.classList.remove('alarm-flash-mode');
       }
     }
 
     function toggleNeonAlarmPulse() {
       const container = document.getElementById('orders-feed');
       const header = document.querySelector('header');
-      if (container) container.classList.toggle('alarm-pulse');
-      if (header) header.classList.toggle('alarm-pulse');
+      if (container) container.classList.toggle('alarm-flash-mode');
+      if (header) header.classList.toggle('alarm-flash-mode');
     }
 
     function testAlarmPulseOnce() {
       startAlarmLoop(null);
-      setTimeout(() => stopAlarmLoop(), 5000);
+      setTimeout(() => stopAlarmLoop(), 6000);
     }
 
     function playAlarmSound() {

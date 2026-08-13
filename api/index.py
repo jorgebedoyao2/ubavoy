@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict
 
 # Adaptador para Vercel Serverless
 try:
@@ -51,6 +51,16 @@ class HealthResponse(BaseModel):
     commissionPerOrderCOP: int
     timestamp: str
 
+class AdminStatsResponse(BaseModel):
+    status: str
+    total_orders: int
+    completed_orders: int
+    total_revenue: float
+    platform_commissions: float
+    orders_by_status: Dict[str, int]
+    city: str
+    timestamp: str
+
 # Endpoints
 @app.get("/api/health", response_model=HealthResponse)
 def health_check():
@@ -83,6 +93,30 @@ def recharge_driver_balance(payload: RechargeRequest):
         amount=payload.amount,
         newBalanceSimulated=simulated_new_balance,
         reference=ref,
+        timestamp=datetime.utcnow().isoformat() + "Z"
+    )
+
+@app.get("/api/admin/stats", response_model=AdminStatsResponse)
+def get_admin_stats():
+    """Endpoint de Estadísticas y Métricas Generales del Dashboard Administrativo de UbaVoy"""
+    total_orders = 12
+    completed_orders = 8
+    total_revenue = 64000.0
+    commissions = total_orders * 500.0
+
+    return AdminStatsResponse(
+        status="success",
+        total_orders=total_orders,
+        completed_orders=completed_orders,
+        total_revenue=total_revenue,
+        platform_commissions=commissions,
+        orders_by_status={
+            "pending": 2,
+            "assigned": 2,
+            "completed": 8,
+            "cancelled": 0
+        },
+        city="Ubaté, Cundinamarca",
         timestamp=datetime.utcnow().isoformat() + "Z"
     )
 
