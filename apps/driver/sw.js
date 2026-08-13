@@ -1,39 +1,52 @@
-const CACHE_NAME = 'ubavoy-driver-v7.0.0';
-const ASSETS = [
-  '/apps/driver/',
-  '/apps/driver/index.html',
+const CACHE_NAME = 'ubavoy-driver-v10.1';
+const ASSETS_TO_CACHE = [
   '/apps/driver/manifest.json',
-  '/shared/firebase_config.js',
   '/icon-192.svg',
-  '/icon-512.svg',
   'https://cdn.tailwindcss.com',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS).catch(() => {}))
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS_TO_CACHE);
+    }).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(
-      keys.map((k) => k !== CACHE_NAME && caches.delete(k))
-    ))
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cache) => {
+          if (cache !== CACHE_NAME) {
+            console.log('🧹 Eliminando caché antigua de Driver:', cache);
+            return caches.delete(cache);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET' || event.request.url.includes('firestore.googleapis.com')) return;
+  const url = new URL(event.request.url);
 
+  // Network-First para páginas HTML y llamadas a Firebase Firestore
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.hostname.includes('firestore.googleapis.com')) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Cache-First para recursos estáticos (CSS, Fuentes, Iconos)
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).catch(() => {
-        if (event.request.mode === 'navigate') return caches.match('/apps/driver/index.html');
-      });
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return fetch(event.request);
     })
   );
 });

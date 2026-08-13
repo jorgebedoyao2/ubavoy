@@ -145,13 +145,20 @@
         </div>
       </div>
 
-      <!-- ALERTA SONORA BANNER CON DESBLOQUEO WEB AUDIO API -->
-      <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-300 flex items-center justify-between shadow-md">
-        <span class="flex items-center gap-2">
-          <i class="fa-solid fa-volume-high text-amber-400"></i> Alerta Sonora para Carreras Nuevas
-        </span>
-        <button onclick="playAlarmSound()" class="text-[11px] bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm">
-          Probar Sonido 🎵
+      <!-- ALERTA SONORA BANNER CON DIAGNÓSTICO -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 space-y-2 shadow-md">
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2">
+            <i class="fa-solid fa-volume-high text-amber-400"></i> Alerta Sonora
+          </span>
+          <button onclick="playAlarmSound()" class="text-[11px] bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm">
+            Probar Sonido 🎵
+          </button>
+        </div>
+
+        <!-- BOTÓN DIAGNÓSTICO DE COMPROBACIÓN DIRECTA -->
+        <button onclick="forceReloadOrdersDiagnostic()" class="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all border border-slate-700">
+          <i class="fa-solid fa-rotate-right"></i> 🔄 Forzar Recarga de Carreras (Diagnóstico)
         </button>
       </div>
 
@@ -292,7 +299,7 @@
 
   </div>
 
-  <!-- JAVASCRIPT LOGIC PWA DOMICILIARIO CON LISTENER FIRESTORE MEJORADO -->
+  <!-- JAVASCRIPT LOGIC PWA DOMICILIARIO ROBUSTO 100% FIRESTORE -->
   <script>
     let isAvailable = true;
     let unsubscribeOrders = null;
@@ -317,7 +324,6 @@
       startDriverFirestoreRealtime();
     });
 
-    // FUNCIÓN DE ALERTA SONORA BEEP CON DESBLOQUEO DE AUDIO API
     function playAlarmSound() {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -328,7 +334,7 @@
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, ctx.currentTime); // Beep A5
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
         gain.gain.setValueAtTime(0.2, ctx.currentTime);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -514,64 +520,51 @@
       startDriverFirestoreRealtime();
     }
 
-    // REALTIME FIRESTORE LISTENER CON CONSULTA TOLERANTE ('pending' y 'PENDING')
+    // LISTENER EN TIEMPO REAL SOBRE COLECCIÓN COMPLETA DE 'orders' CON FILTRADO MANUAL CASE-INSENSITIVE
     function startDriverFirestoreRealtime() {
       if (!isAvailable || typeof db === 'undefined' || db === null) return;
 
       stopDriverFirestoreRealtime();
       isInitialLoad = true;
+      console.log("📡 Iniciando listener en tiempo real de orders en Driver...");
 
-      // Consulta tolerante a minúsculas y mayúsculas para estado pendiente
-      const pendingQuery = db.collection('orders').where('status', 'in', ['pending', 'PENDING']);
+      const ordersRef = db.collection('orders');
 
-      unsubscribeOrders = pendingQuery.onSnapshot((snapshot) => {
+      unsubscribeOrders = ordersRef.onSnapshot((snapshot) => {
+        console.log("📦 Total documentos recibidos en orders:", snapshot.docs.length);
+
         const pendingOrders = [];
+        const assignedOrders = [];
         const driverId = currentDriver.uid || currentDriver.phone;
 
         snapshot.forEach(doc => {
-          const o = doc.data();
-          o.id = doc.id;
-          pendingOrders.push(o);
+          const data = doc.data();
+          data.id = doc.id;
+
+          const st = data.status ? data.status.toString().toLowerCase() : '';
+          
+          if (st === 'pending') {
+            pendingOrders.push(data);
+          } else if ((st === 'assigned' || st === 'in_transit') && (data.assigned_driver_id === driverId || data.driver_phone === currentDriver.phone)) {
+            assignedOrders.push(data);
+          }
         });
 
+        console.log("🚨 Carreras pendientes filtradas:", pendingOrders.length);
         const countBadge = document.getElementById('available-count-badge');
         if (countBadge) countBadge.innerText = `${pendingOrders.length} Libres`;
 
-        // Reproducir sonido si NO es la carga inicial y hay nuevos documentos añadidos
         if (!isInitialLoad && snapshot.docChanges().some(change => change.type === "added")) {
           playAlarmSound();
         }
         isInitialLoad = false;
 
         renderOrdersFeed(pendingOrders);
+        renderAssignedOrdersFeed(assignedOrders);
       }, (error) => {
-        console.error("❌ Error en listener de driver:", error);
+        console.error("❌ Error de Firestore en Driver:", error);
+        showToast("Error de Firestore: " + error.message, "error");
       });
-
-      // Listener para carreras asignadas al repartidor
-      const driverDocId = currentDriver.uid || currentDriver.phone;
-      if (driverDocId) {
-        db.collection('orders')
-          .where('assigned_driver_id', '==', driverDocId)
-          .where('status', 'in', ['assigned', 'in_transit'])
-          .onSnapshot((snapshot) => {
-            const assignedOrders = [];
-            snapshot.forEach(doc => {
-              const data = doc.data();
-              data.id = doc.id;
-              assignedOrders.push(data);
-            });
-            renderAssignedOrdersFeed(assignedOrders);
-          });
-
-        db.collection('users').doc(driverDocId).onSnapshot((doc) => {
-          if (doc.exists) {
-            currentDriver = { ...currentDriver, ...doc.data() };
-            localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
-            updateHeaderUserUI();
-          }
-        });
-      }
     }
 
     function stopDriverFirestoreRealtime() {
@@ -580,6 +573,28 @@
         unsubscribeOrders = null;
       }
       renderOrdersFeed([]);
+    }
+
+    // BOTÓN DE DIAGNÓSTICO DIRECTO QUE EJECUTA UN GET A FIRESTORE
+    async function forceReloadOrdersDiagnostic() {
+      showToast('🔄 Realizando diagnóstico en Firestore...');
+      if (!db) {
+        alert("Firestore no está inicializado.");
+        return;
+      }
+      try {
+        const snapshot = await db.collection('orders').get();
+        const total = snapshot.docs.length;
+        const pending = snapshot.docs.filter(d => {
+          const st = (d.data().status || '').toString().toLowerCase();
+          return st === 'pending';
+        }).length;
+
+        alert(`🔍 DIAGNÓSTICO FIRESTORE:\nTotal documentos en 'orders': ${total}\nÓrdenes pendientes (pending): ${pending}`);
+        startDriverFirestoreRealtime();
+      } catch (err) {
+        alert("Error de consulta en Firestore: " + err.message);
+      }
     }
 
     function renderOrdersFeed(orders) {
@@ -835,7 +850,7 @@
         toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-amber-500/50 shadow-2xl flex items-center gap-3';
       } else {
         toastIcon.className = "fa-solid fa-circle-check text-amber-400 text-base";
-        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-amber-500/50 shadow-2xl flex items-center gap-3';
+        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-amber-500/40 shadow-2xl flex items-center gap-3';
       }
 
       toast.classList.remove('hidden');
