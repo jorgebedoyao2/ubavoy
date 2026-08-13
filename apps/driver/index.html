@@ -171,16 +171,16 @@
           </div>
 
           <button onclick="openRechargeModal()" class="py-1.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all">
-            <i class="fa-solid fa-wallet"></i> Recargar
+            <i class="fa-solid fa-wallet"></i> Recargar Nequi / Daviplata
           </button>
         </div>
 
         <div class="flex items-center justify-between">
           <span class="flex items-center gap-2 text-xs text-slate-300 font-semibold">
-            <i class="fa-solid fa-volume-high text-amber-400"></i> Alerta Sonora y Vibración
+            <i class="fa-solid fa-volume-high text-amber-400"></i> Alerta Tono Sostenido Pí-Pí-Pí
           </span>
           <button onclick="testAlarmPulseOnce()" class="text-[11px] bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm">
-            Probar Alerta 🎵📳
+            Probar Alerta 🔊📳
           </button>
         </div>
 
@@ -232,7 +232,89 @@
 
     </main>
 
-    <!-- MODAL SELECCIÓN GPS NAVEGACIÓN (GOOGLE MAPS O WAZE) -->
+    <!-- MODAL ERROR DE AUTORIZACIÓN EMAIL RESTRENGIDO -->
+    <div id="unauthorized-modal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="glass-card w-full max-w-sm rounded-2xl p-6 space-y-4 border border-rose-500/50 text-center shadow-2xl">
+        <div class="w-14 h-14 rounded-full bg-rose-950 border border-rose-500/50 mx-auto flex items-center justify-center text-rose-400 text-2xl">
+          <i class="fa-solid fa-user-lock"></i>
+        </div>
+        <div class="space-y-1">
+          <h3 class="font-display font-extrabold text-base text-white">⛔ Correo no registrado/autorizado</h3>
+          <p class="text-xs text-slate-300">
+            El correo <strong id="unauthorized-email-display" class="text-amber-400 font-mono">---</strong> no ha sido habilitado como repartidor en la plataforma UbaVoy.
+          </p>
+        </div>
+        <p class="text-[11px] text-slate-400 bg-slate-900 p-3 rounded-xl border border-slate-800">
+          Solicita tu habilitación al administrador ingresando tus datos de vehículo y documento en central Ubaté.
+        </p>
+        <button onclick="closeUnauthorizedModal()" class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700">
+          Entendido
+        </button>
+      </div>
+    </div>
+
+    <!-- MODAL SELECCIÓN PAQUETES DE RECARGA Y COMPROBANTE NEQUI/DAVIPLATA -->
+    <div id="recharge-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-amber-500/40 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
+            <i class="fa-solid fa-box-open text-amber-400"></i> Paquetes de Recarga Prepago
+          </h3>
+          <button onclick="closeRechargeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <form onsubmit="handleSendRechargeReceipt(event)" class="space-y-3.5 text-xs">
+          <!-- SELECCIÓN DE PAQUETE -->
+          <div>
+            <label class="block font-semibold text-slate-200 mb-1">Selecciona tu Paquete:</label>
+            <div class="grid grid-cols-1 gap-2">
+              <label class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 flex items-center justify-between cursor-pointer hover:border-amber-500/50">
+                <div class="flex items-center gap-2">
+                  <input type="radio" name="recharge_package" value="10000" checked class="accent-amber-500">
+                  <span class="font-bold text-slate-100">📦 10 Domicilios</span>
+                </div>
+                <span class="font-extrabold text-emerald-400">$10.000 COP</span>
+              </label>
+
+              <label class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 flex items-center justify-between cursor-pointer hover:border-amber-500/50">
+                <div class="flex items-center gap-2">
+                  <input type="radio" name="recharge_package" value="20000" class="accent-amber-500">
+                  <span class="font-bold text-slate-100">📦 20 Domicilios</span>
+                </div>
+                <span class="font-extrabold text-emerald-400">$20.000 COP</span>
+              </label>
+
+              <label class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 flex items-center justify-between cursor-pointer hover:border-amber-500/50">
+                <div class="flex items-center gap-2">
+                  <input type="radio" name="recharge_package" value="50000" class="accent-amber-500">
+                  <span class="font-bold text-slate-100">📦 50 Domicilios</span>
+                </div>
+                <span class="font-extrabold text-emerald-400">$50.000 COP</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- INFORMACIÓN DE TRANSFERENCIA -->
+          <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 space-y-1">
+            <p class="text-slate-300"><strong>Nequi / Daviplata:</strong> <span class="text-amber-400 font-bold font-mono">3101234567</span></p>
+            <p class="text-slate-400"><strong>Titular:</strong> Central UbaVoy Ubaté</p>
+          </div>
+
+          <!-- COMPROBANTE LINK / CAPTURA -->
+          <div>
+            <label class="block font-semibold text-slate-200 mb-1">Captura de Comprobante / URL:</label>
+            <input type="text" id="recharge-receipt-url" placeholder="Ej: https://imgur.com/x o Número Nequi Ref"
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-amber-500">
+          </div>
+
+          <button type="submit" class="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md">
+            <i class="fa-solid fa-paper-plane"></i> Enviar Comprobante a Verificación
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL SELECCIÓN GPS NAVEGACIÓN -->
     <div id="gps-nav-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
       <div class="glass-card w-full max-w-xs rounded-2xl p-5 space-y-4 border border-sky-500/50 shadow-2xl text-center">
         <div class="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -315,33 +397,6 @@
       </div>
     </div>
 
-    <!-- MODAL RECARGA SALDO PREPAGO -->
-    <div id="recharge-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-slate-700 shadow-2xl">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
-            <i class="fa-solid fa-wallet text-amber-400"></i> Recargar Saldo Prepago
-          </h3>
-          <button onclick="closeRechargeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-
-        <div class="text-xs text-slate-300 space-y-2">
-          <p>Para recargar tu saldo en la plataforma UbaVoy:</p>
-          <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 space-y-1">
-            <p><strong>Nequi / Daviplata:</strong> 3101234567</p>
-            <p><strong>Titular:</strong> UbaVoy Central Ubaté</p>
-          </div>
-          <p class="text-[11px] text-amber-400">Envía el comprobante por WhatsApp para acreditación inmediata.</p>
-        </div>
-
-        <a id="btn-recharge-whatsapp" href="https://wa.me/573101234567?text=Hola,%20quiero%20recargar%20saldo%20en%20mi%20cuenta%20de%20Domiciliario" target="_blank"
-          class="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md">
-          <i class="fa-brands fa-whatsapp text-sm"></i>
-          <span>Enviar Comprobante Nequi</span>
-        </a>
-      </div>
-    </div>
-
     <!-- TOAST NOTIFICACIONES -->
     <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-amber-500/40 shadow-xl flex items-center gap-3">
       <i id="toast-icon" class="fa-solid fa-circle-check text-amber-400 text-base"></i>
@@ -350,12 +405,15 @@
 
   </div>
 
-  <!-- JAVASCRIPT DOMICILIARIO CON BUCLE DE ALERTA CONTINUO Y ACEPTACIÓN ATÓMICA -->
+  <!-- JAVASCRIPT DOMICILIARIO CON MOTOR DE AUDIO EN BUCLE (SUSTAINED ALARM ENGINE) -->
   <script>
     let isAvailable = false;
     let unsubscribeOrders = null;
     let isInitialLoad = true;
-    let alarmIntervalId = null;
+
+    // MOTOR DE AUDIO EN BUCLE SOSTENIDO PÍ-PÍ-PÍ
+    let audioCtx = null;
+    let alarmTimer = null;
 
     let currentDriver = JSON.parse(localStorage.getItem('ubavoy_driver_user') || JSON.stringify({
       uid: null,
@@ -375,9 +433,7 @@
 
       // DESBLOQUEO AUTOMÁTICO DE AUDIOCONTEXT AL TOCAR CUALQUIER PARTE DE LA PANTALLA
       const unlockAudio = () => {
-        if (typeof playNewOrderSound === 'function') {
-          playNewOrderSound();
-        }
+        initAudioEngine();
         document.removeEventListener('click', unlockAudio);
         document.removeEventListener('touchstart', unlockAudio);
       };
@@ -390,30 +446,22 @@
       startDriverFirestoreRealtime();
     });
 
-    // 1. ACTIVAR PERMISOS Y DESBLOQUEAR AUDIOCONTEXT AL CAMBIAR A 'DISPONIBLE'
-    function toggleAvailability() {
-      isAvailable = !isAvailable;
-      updateAvailabilityUI();
-
-      if (isAvailable) {
-        playAlarmSound();
-
-        if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
-          Notification.requestPermission();
-        }
-
-        startDriverFirestoreRealtime();
-        showToast('🟢 ¡Estás DISPONIBLE para recibir carreras!');
-      } else {
-        stopAlarmLoop(); // DETENER BUCLE DE ALERTA INMEDIATAMENTE
-        stopDriverFirestoreRealtime();
-        showToast('🔴 Has pasado a estado EN PAUSA.', 'warning');
+    // 1. INICIALIZADOR DE MOTOR DE AUDIO WEB API
+    function initAudioEngine() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
       }
     }
 
-    // 2. BUCLE CONTINUO DE ALERTA INTERMITENTE (SONIDO + VIBRACIÓN VIBRATE([400, 200, 400]) + PARPADEO NEÓN)
-    function startAlarmLoop(order) {
-      if (alarmIntervalId !== null) return;
+    // 2. GENERADOR DE ALERTA SOSTENIDA PÍ-PÍ-PÍ (CADA 500ms CON VIBRACIÓN MÓVIL)
+    function startSustainedAlarm(order) {
+      initAudioEngine();
+      if (alarmTimer) return; // Ya está sonando el bucle
+
+      console.log("🚨 Iniciando alarma sostenida Pí-Pí-Pí...");
 
       // Notificación Push inicial si está minimizado
       if ("Notification" in window && Notification.permission === "granted") {
@@ -423,50 +471,54 @@
           new Notification("🚨 ¡NUEVO MANDADO EN UBATÉ!", {
             body: `${taskDesc} - ${addr}`,
             icon: "/icon-192.svg",
-            vibrate: [400, 200, 400]
+            vibrate: [250, 100, 250]
           });
         } catch (e) {}
       }
 
-      // Intervalo cada 1500ms
-      alarmIntervalId = setInterval(() => {
-        // a) Beep sonoro / Sirena
-        playAlarmSound();
+      alarmTimer = setInterval(() => {
+        try {
+          if (!audioCtx) return;
+          if (audioCtx.state === 'suspended') audioCtx.resume();
 
-        // b) Vibración Móvil Continua cada 1500ms con navigator.vibrate([400, 200, 400])
-        if (navigator.vibrate) {
-          try {
-            navigator.vibrate([400, 200, 400]);
-          } catch (e) {}
+          // Tono 1 (Pí - Frecuencia 950Hz por 250ms)
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(950, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.25);
+
+          if ("vibrate" in navigator) {
+            navigator.vibrate(250);
+          }
+
+          toggleNeonAlarmPulse();
+
+        } catch (e) {
+          console.error("Error en pulso de alarma:", e);
         }
+      }, 500);
 
-        // c) Toggle Parpadeo Neón Visual Verde Neón / Rojo Alerta
-        toggleNeonAlarmPulse();
-
-      }, 1500);
-
-      // Disparo inmediato en el instante 0
-      playAlarmSound();
-      if (navigator.vibrate) {
-        try { navigator.vibrate([400, 200, 400]); } catch (e) {}
-      }
       toggleNeonAlarmPulse();
     }
 
-    function stopAlarmLoop() {
-      if (alarmIntervalId !== null) {
-        clearInterval(alarmIntervalId);
-        alarmIntervalId = null;
+    function stopSustainedAlarm() {
+      if (alarmTimer) {
+        clearInterval(alarmTimer);
+        alarmTimer = null;
+        console.log("🔕 Alarma sostenida detenida.");
       }
 
-      // Cancelar vibraciones del sistema
-      if (navigator.vibrate) {
-        try {
-          navigator.vibrate(0);
-        } catch (e) {}
+      if ("vibrate" in navigator) {
+        navigator.vibrate(0);
       }
 
-      // Limpiar clases de parpadeo neón
       const container = document.getElementById('orders-feed');
       const header = document.querySelector('header');
       if (container) {
@@ -487,13 +539,27 @@
     }
 
     function testAlarmPulseOnce() {
-      startAlarmLoop(null);
-      setTimeout(() => stopAlarmLoop(), 6000);
+      startSustainedAlarm(null);
+      setTimeout(() => stopSustainedAlarm(), 5000);
     }
 
-    function playAlarmSound() {
-      if (typeof playNewOrderSound === 'function') {
-        playNewOrderSound();
+    function toggleAvailability() {
+      isAvailable = !isAvailable;
+      updateAvailabilityUI();
+
+      if (isAvailable) {
+        initAudioEngine();
+
+        if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+          Notification.requestPermission();
+        }
+
+        startDriverFirestoreRealtime();
+        showToast('🟢 ¡Estás DISPONIBLE para recibir carreras!');
+      } else {
+        stopSustainedAlarm();
+        stopDriverFirestoreRealtime();
+        showToast('🔴 Has pasado a estado EN PAUSA.', 'warning');
       }
     }
 
@@ -515,54 +581,66 @@
       }
     }
 
-    function initAuthListenerDriver() {
-      if (typeof auth !== 'undefined' && auth !== null) {
-        auth.onAuthStateChanged((user) => {
-          if (user) {
-            currentDriver.uid = user.uid;
-            currentDriver.email = user.email;
-            currentDriver.name = user.displayName || currentDriver.name;
-            currentDriver.photoURL = user.photoURL;
-
-            localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
-            updateHeaderUserUI();
-
-            if (typeof db !== 'undefined' && db !== null) {
-              db.collection('users').doc(user.uid).set({
-                uid: user.uid,
-                email: user.email,
-                name: currentDriver.name,
-                photoURL: user.photoURL,
-                vehicle: currentDriver.vehicle,
-                role: 'driver',
-                last_login: new Date().toISOString()
-              }, { merge: true });
-            }
-          }
-        });
-      }
-    }
-
+    // 3. INICIO DE SESIÓN CON GOOGLE Y VALIDACIÓN ESTRICTA DE PRE-APROBACIÓN POR EMAIL
     async function handleGoogleSignInDriver() {
       try {
         showToast('Iniciando sesión con Google...');
         const result = await signInWithGoogle();
         const user = result.user;
-        
-        currentDriver.uid = user.uid;
-        currentDriver.email = user.email;
-        currentDriver.name = user.displayName;
-        currentDriver.photoURL = user.photoURL;
+        const email = (user.email || '').toLowerCase().trim();
 
-        localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
-        updateHeaderUserUI();
-        closeAuthModal();
-        showToast(`¡Bienvenido Domiciliario ${user.displayName}!`);
-        startDriverFirestoreRealtime();
+        if (typeof db !== 'undefined' && db !== null) {
+          let isApproved = false;
+          let driverData = null;
+
+          const querySnap = await db.collection('users')
+            .where('email', '==', email)
+            .get();
+
+          if (!querySnap.empty) {
+            querySnap.forEach(doc => {
+              const data = doc.data();
+              if (data.is_approved === true && (data.role === 'driver' || !data.role)) {
+                isApproved = true;
+                driverData = data;
+              }
+            });
+          }
+
+          if (!isApproved) {
+            await signOutUser();
+            openUnauthorizedModal(email);
+            return;
+          }
+
+          currentDriver.uid = user.uid;
+          currentDriver.email = email;
+          currentDriver.name = user.displayName || driverData?.name || currentDriver.name;
+          currentDriver.photoURL = user.photoURL;
+          currentDriver.balance = driverData?.balance !== undefined ? driverData.balance : currentDriver.balance;
+
+          localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
+          updateHeaderUserUI();
+          closeAuthModal();
+          showToast(`¡Bienvenido Domiciliario ${user.displayName}!`);
+          startDriverFirestoreRealtime();
+        }
       } catch (err) {
         console.error("Error Google Auth Driver:", err);
         showToast('No se pudo iniciar sesión con Google', 'error');
       }
+    }
+
+    function openUnauthorizedModal(email) {
+      const modal = document.getElementById('unauthorized-modal');
+      const emailEl = document.getElementById('unauthorized-email-display');
+      if (emailEl) emailEl.innerText = email || '';
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeUnauthorizedModal() {
+      const modal = document.getElementById('unauthorized-modal');
+      if (modal) modal.classList.add('hidden');
     }
 
     function updateHeaderUserUI() {
@@ -631,6 +709,38 @@
       startDriverFirestoreRealtime();
     }
 
+    // 4. ENVÍO DE COMPROBANTE DE RECARGA CON PAQUETES PREPAGO
+    async function handleSendRechargeReceipt(e) {
+      e.preventDefault();
+      const selectedPkgRadio = document.querySelector('input[name="recharge_package"]:checked');
+      const amount = selectedPkgRadio ? parseInt(selectedPkgRadio.value) : 10000;
+      const pkgName = amount === 10000 ? '📦 10 Domicilios' : amount === 20000 ? '📦 20 Domicilios' : '📦 50 Domicilios';
+      const receiptUrl = document.getElementById('recharge-receipt-url').value.trim() || 'Nequi-Ref-' + Date.now();
+
+      try {
+        const rechargeData = {
+          driver_id: currentDriver.uid || currentDriver.phone || 'driver_guest',
+          driver_email: currentDriver.email || 'driver@ubavoy.com',
+          driver_name: currentDriver.name || 'Domiciliario UbaVoy',
+          amount: amount,
+          package_name: pkgName,
+          receipt_url: receiptUrl,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        };
+
+        if (typeof db !== 'undefined' && db !== null) {
+          await db.collection('recharges').add(rechargeData);
+        }
+
+        closeRechargeModal();
+        showToast('✅ Comprobante enviado. Tu saldo se actualizará apenas el Administrador lo verifique.');
+      } catch (err) {
+        console.error("Error enviando comprobante:", err);
+        showToast('No se pudo registrar la solicitud de recarga', 'error');
+      }
+    }
+
     function startDriverFirestoreRealtime() {
       if (!isAvailable || typeof db === 'undefined' || db === null) return;
 
@@ -660,11 +770,10 @@
         const countBadge = document.getElementById('available-count-badge');
         if (countBadge) countBadge.innerText = `${pendingOrders.length} Libres`;
 
-        // 3. CONTROL DE BUCLE DE ALERTA SEGÚN DISPONIBILIDAD DE CARRERAS LIBRES
         if (pendingOrders.length > 0 && isAvailable) {
-          startAlarmLoop(pendingOrders[0]);
+          startSustainedAlarm(pendingOrders[0]);
         } else {
-          stopAlarmLoop();
+          stopSustainedAlarm();
         }
 
         isInitialLoad = false;
@@ -677,7 +786,7 @@
     }
 
     function stopDriverFirestoreRealtime() {
-      stopAlarmLoop();
+      stopSustainedAlarm();
       if (unsubscribeOrders) {
         unsubscribeOrders();
         unsubscribeOrders = null;
@@ -838,9 +947,8 @@
       }).join('');
     }
 
-    // 2. ACEPTACIÓN ATÓMICA EN FIRESTORE CON CONCURRENCIA
     async function acceptOrder(orderId) {
-      stopAlarmLoop(); // DETENER ALERTA EN ACCIÓN DIRECTA
+      stopSustainedAlarm();
 
       if (currentDriver.is_approved === false) {
         showToast('⚠️ Tu cuenta no ha sido aprobada por el Administrador.', 'error');

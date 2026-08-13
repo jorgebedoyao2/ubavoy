@@ -125,7 +125,7 @@
     <!-- MAIN CONTENT DASHBOARD ADMIN -->
     <main id="admin-dashboard-content" class="hidden flex-1 px-4 py-4 space-y-5">
 
-      <!-- TARJETAS KPI RESUMEN DE MÉTRICAS (ESTILO OSCURO / NEÓN) -->
+      <!-- TARJETAS KPI RESUMEN DE MÉTRICAS -->
       <div class="space-y-2">
         <div class="flex items-center justify-between px-1">
           <h2 class="font-display font-bold text-sm text-white flex items-center gap-2">
@@ -161,6 +161,67 @@
             <span class="text-[9px] text-sky-300">$500 COP por carrera</span>
           </div>
         </div>
+      </div>
+
+      <!-- SECTOR: APROBACIÓN DE RECARGAS DE DOMICILIARIOS PENDIENTES -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+            <i class="fa-solid fa-wallet text-amber-400"></i> Recargas de Domiciliarios Pendientes
+          </h3>
+          <span id="pending-recharges-count" class="text-xs font-bold text-amber-400 bg-amber-950 px-2.5 py-0.5 rounded-full border border-amber-800">
+            0 Pendientes
+          </span>
+        </div>
+
+        <div id="pending-recharges-feed" class="space-y-3">
+          <div class="glass-card rounded-2xl p-4 text-center text-xs text-slate-400">
+            Sin recargas pendientes por verificar.
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTOR: PRE-APROBACIÓN Y GESTIÓN DE DOMICILIARIOS POR EMAIL -->
+      <div class="glass-card rounded-2xl p-4 border border-purple-500/30 space-y-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+            <i class="fa-solid fa-user-plus text-purple-400"></i> Pre-Aprobar Nuevo Domiciliario
+          </h3>
+        </div>
+
+        <form onsubmit="handlePreApproveDriver(event)" class="space-y-3 text-xs">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Nombre Completo</label>
+              <input type="text" id="pre-driver-name" required placeholder="Ej: Carlos Gómez"
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-purple-500">
+            </div>
+
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Correo Electrónico (Gmail)</label>
+              <input type="email" id="pre-driver-email" required placeholder="conduct@gmail.com"
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-purple-500">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Teléfono WhatsApp</label>
+              <input type="tel" id="pre-driver-phone" required placeholder="3101234567"
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-purple-500">
+            </div>
+
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Vehículo / Placa</label>
+              <input type="text" id="pre-driver-vehicle" required placeholder="Moto FZ 150 - ABC-123"
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-purple-500">
+            </div>
+          </div>
+
+          <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2">
+            <i class="fa-solid fa-check-double"></i> Pre-Aprobar e Inscribir Domiciliario ($0 COP Saldo)
+          </button>
+        </form>
       </div>
 
       <!-- SECTOR GRÁFICOS CHART.JS -->
@@ -238,7 +299,7 @@
       <div class="space-y-3">
         <div class="flex items-center justify-between px-1">
           <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
-            <i class="fa-solid fa-users-gear text-purple-400"></i> Gestión de Repartidores
+            <i class="fa-solid fa-users-gear text-purple-400"></i> Gestión de Repartidores Registrados
           </h3>
           <button onclick="renderAdminDriversList()" class="text-xs text-slate-400 hover:text-white flex items-center gap-1">
             <i class="fa-solid fa-rotate"></i> Actualizar
@@ -270,8 +331,8 @@
     let barChartInstance = null;
 
     let localUsers = JSON.parse(localStorage.getItem('ubavoy_local_users') || JSON.stringify([
-      { phone: '3109876543', name: 'Carlos Mario (Domiciliario)', role: 'driver', is_approved: true, balance: 10000, vehicle: 'Moto Honda 125 - XYZ-12A' },
-      { phone: '3110001122', name: 'Juan Repartidor', role: 'driver', is_approved: false, balance: 5000, vehicle: 'Moto Yamaha FZ 150 - ABC-99Z' }
+      { phone: '3109876543', name: 'Carlos Mario (Domiciliario)', email: 'carlos@gmail.com', role: 'driver', is_approved: true, balance: 10000, vehicle: 'Moto Honda 125 - XYZ-12A' },
+      { phone: '3110001122', name: 'Juan Repartidor', email: 'juan@gmail.com', role: 'driver', is_approved: true, balance: 5000, vehicle: 'Moto Yamaha FZ 150 - ABC-99Z' }
     ]));
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -310,6 +371,158 @@
       renderAdminDriversList();
       loadAdminStatsFromAPIAndFirestore();
       subscribeRealtimeAdminOrders();
+      subscribePendingRechargesAdmin();
+    }
+
+    async function handlePreApproveDriver(e) {
+      e.preventDefault();
+      const name = document.getElementById('pre-driver-name').value.trim();
+      const email = document.getElementById('pre-driver-email').value.trim().toLowerCase();
+      const phone = document.getElementById('pre-driver-phone').value.trim().replace(/[^0-9]/g, '');
+      const vehicle = document.getElementById('pre-driver-vehicle').value.trim();
+
+      if (!name || !email) {
+        showToast('Nombre y email requeridos', 'error');
+        return;
+      }
+
+      try {
+        const driverDoc = {
+          name,
+          email,
+          phone,
+          vehicle,
+          balance: 0,
+          is_approved: true,
+          role: 'driver',
+          created_at: new Date().toISOString()
+        };
+
+        if (typeof db !== 'undefined' && db !== null) {
+          const docKey = email.replace(/[^a-zA-Z0-9]/g, '_');
+          await db.collection('users').doc(docKey).set(driverDoc, { merge: true });
+        }
+
+        localUsers.push(driverDoc);
+        localStorage.setItem('ubavoy_local_users', JSON.stringify(localUsers));
+
+        renderAdminDriversList();
+        e.target.reset();
+        showToast(`✅ Domiciliario ${name} pre-aprobado exitosamente con correo ${email}`);
+      } catch (err) {
+        console.error("Error pre-aprobando domiciliario:", err);
+        showToast('Error registrando domiciliario', 'error');
+      }
+    }
+
+    function subscribePendingRechargesAdmin() {
+      if (typeof db === 'undefined' || db === null) return;
+
+      db.collection('recharges')
+        .where('status', '==', 'pending')
+        .onSnapshot((snapshot) => {
+          const pendingList = [];
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            data.id = doc.id;
+            pendingList.push(data);
+          });
+
+          renderPendingRechargesFeed(pendingList);
+        }, (err) => {
+          console.error("Error escuchando recargas pendientes:", err);
+        });
+    }
+
+    function renderPendingRechargesFeed(recharges) {
+      const feed = document.getElementById('pending-recharges-feed');
+      const badge = document.getElementById('pending-recharges-count');
+      if (badge) badge.innerText = `${recharges.length} Pendientes`;
+      if (!feed) return;
+
+      if (recharges.length === 0) {
+        feed.innerHTML = `
+          <div class="glass-card rounded-2xl p-4 text-center text-xs text-slate-400">
+            Sin recargas pendientes por verificar.
+          </div>
+        `;
+        return;
+      }
+
+      feed.innerHTML = recharges.map(r => {
+        return `
+          <div class="glass-card rounded-2xl p-4 space-y-2.5 border border-amber-500/40 bg-slate-900/90 shadow-xl">
+            <div class="flex items-start justify-between border-b border-slate-800 pb-2">
+              <div>
+                <h4 class="font-bold text-xs text-white">${escapeHtml(r.driver_name || 'Domiciliario')}</h4>
+                <p class="text-[11px] text-slate-400">${escapeHtml(r.driver_email || '')}</p>
+              </div>
+              <span class="font-black text-sm text-emerald-400">$${(r.amount || 0).toLocaleString()} COP</span>
+            </div>
+
+            <div class="text-xs text-slate-300 space-y-1">
+              <p><strong>Paquete:</strong> ${escapeHtml(r.package_name || 'Personalizado')}</p>
+              <p><strong>Comprobante / Ref:</strong> <span class="font-mono text-amber-300">${escapeHtml(r.receipt_url || 'N/A')}</span></p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800">
+              <button onclick="approveRecharge('${r.id}', '${r.driver_id}', '${r.driver_email}', ${r.amount})"
+                class="py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-1">
+                <i class="fa-solid fa-check"></i> Aprobar Recarga
+              </button>
+
+              <button onclick="rejectRecharge('${r.id}')"
+                class="py-2 rounded-xl bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-300 font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-1">
+                <i class="fa-solid fa-xmark"></i> Rechazar
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function approveRecharge(rechargeId, driverId, driverEmail, amount) {
+      try {
+        if (typeof db !== 'undefined' && db !== null) {
+          // 1. Marcar recarga como aprobada
+          await db.collection('recharges').doc(rechargeId).update({
+            status: 'approved',
+            approved_at: new Date().toISOString()
+          });
+
+          // 2. Incrementar saldo del repartidor
+          if (driverEmail) {
+            const querySnap = await db.collection('users').where('email', '==', driverEmail).get();
+            if (!querySnap.empty) {
+              querySnap.forEach(async doc => {
+                const currentBal = doc.data().balance || 0;
+                await db.collection('users').doc(doc.id).update({
+                  balance: currentBal + amount
+                });
+              });
+            }
+          }
+        }
+
+        showToast(`🎉 Recarga de $${amount.toLocaleString()} COP aprobada exitosamente`);
+      } catch (err) {
+        console.error("Error al aprobar recarga:", err);
+        showToast('Error aprobando la recarga', 'error');
+      }
+    }
+
+    async function rejectRecharge(rechargeId) {
+      try {
+        if (typeof db !== 'undefined' && db !== null) {
+          await db.collection('recharges').doc(rechargeId).update({
+            status: 'rejected',
+            rejected_at: new Date().toISOString()
+          });
+        }
+        showToast('Recarga rechazada');
+      } catch (err) {
+        console.error("Error al rechazar recarga:", err);
+      }
     }
 
     async function loadAdminStatsFromAPIAndFirestore() {
@@ -489,6 +702,7 @@
               <div>
                 <h4 class="font-bold text-xs text-white">${escapeHtml(driver.name)}</h4>
                 <p class="text-[11px] text-slate-400">${escapeHtml(driver.vehicle)} • WhatsApp: ${driver.phone}</p>
+                <p class="text-[10px] text-purple-300 font-mono">${escapeHtml(driver.email || 'N/A')}</p>
               </div>
               <span class="text-xs font-bold text-emerald-400">$${(driver.balance || 0).toLocaleString()} COP</span>
             </div>
@@ -496,11 +710,11 @@
             <div class="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
               <button onclick="toggleDriverApproval(${index})" 
                 class="px-3 py-1.5 rounded-xl font-bold text-[11px] ${driver.is_approved ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}">
-                ${driver.is_approved ? '🟢 Aprobado' : '🟡 Aprobar Cuenta'}
+                ${driver.is_approved ? '🟢 Pre-Aprobado' : '🟡 Aprobar Cuenta'}
               </button>
 
               <button onclick="quickRechargeDriver(${index})" class="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] shadow-md">
-                + $5,000 Recarga
+                + $5,000 Recarga Directa
               </button>
             </div>
           </div>
