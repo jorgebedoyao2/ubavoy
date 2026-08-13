@@ -1,7 +1,9 @@
 /**
  * UbaVoy - Configuración Compartida de Firebase Firestore & Auth (Proyecto: ubavoy)
  * 
- * Incluye inicialización de Firestore y Firebase Auth con Google Auth Provider.
+ * Incluye inicialización de Firestore, Firebase Auth con Google Auth Provider,
+ * y script de sembrado de datos iniciales (seedInitialFirestoreData) para las colecciones
+ * 'users', 'orders' y 'system_config'.
  */
 
 const firebaseConfig = {
@@ -47,11 +49,91 @@ try {
         console.warn("⚠️ Persistencia Firebase: Navegador no compatible con almacenamiento offline.");
       }
     });
+
+    // Invocación automática de sembrado de datos iniciales al arrancar
+    setTimeout(() => {
+      seedInitialFirestoreData();
+    }, 800);
+
   } else {
     console.error("❌ SDK de Firebase no encontrado en el entorno.");
   }
 } catch (error) {
   console.warn("⚠️ Error al inicializar Firebase Firestore/Auth:", error.message);
+}
+
+/**
+ * SEMBRADO DE DATOS INICIALES EN FIRESTORE (seedInitialFirestoreData)
+ * Crea los documentos base en las colecciones 'users', 'orders' y 'system_config' si no existen.
+ */
+async function seedInitialFirestoreData() {
+  if (!db || firebaseConfig.apiKey === "AIzaSyYOUR_API_KEY_HERE") {
+    console.log("ℹ️ [UbaVoy Seeding] Modo Demo Local activo o API Key pendiente por configurar.");
+    return;
+  }
+
+  try {
+    // A) COLECCIÓN 'users'
+    const adminRef = db.collection('users').doc('admin_system');
+    const adminDoc = await adminRef.get();
+    if (!adminDoc.exists) {
+      await adminRef.set({
+        name: 'Administrador UbaVoy',
+        phone: '3000000000',
+        role: 'admin',
+        is_approved: true,
+        created_at: firebase.firestore.Timestamp.now()
+      });
+    }
+
+    const driverRef = db.collection('users').doc('driver_demo');
+    const driverDoc = await driverRef.get();
+    if (!driverDoc.exists) {
+      await driverRef.set({
+        name: 'Domiciliario Demo',
+        phone: '3100000000',
+        role: 'driver',
+        balance: 10000,
+        is_approved: true,
+        vehicle: 'Moto',
+        created_at: firebase.firestore.Timestamp.now()
+      });
+    }
+
+    // B) COLECCIÓN 'orders'
+    const orderRef = db.collection('orders').doc('order_demo_001');
+    const orderDoc = await orderRef.get();
+    if (!orderDoc.exists) {
+      await orderRef.set({
+        id: 'order_demo_001',
+        client_phone: '3000000000',
+        task_description: 'Pedido de prueba inicial UbaVoy',
+        delivery_address: 'Plaza de Mercado, Ubaté',
+        delivery_coords: { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng },
+        estimated_price: 5000,
+        status: 'pending',
+        delivery_pin: '1234',
+        created_at: firebase.firestore.Timestamp.now()
+      });
+    }
+
+    // C) COLECCIÓN 'system_config'
+    const configRef = db.collection('system_config').doc('settings');
+    const configDoc = await configRef.get();
+    if (!configDoc.exists) {
+      await configRef.set({
+        commission_per_race: 500,
+        platform_name: 'UbaVoy Ubaté',
+        active_status: true,
+        created_at: firebase.firestore.Timestamp.now()
+      });
+    }
+
+    console.log("⚡ Colecciones de Firestore (users, orders, system_config) verificadas e inicializadas correctamente.");
+
+  } catch (err) {
+    console.warn("⚠️ [Seeding Warning] No se pudieron inicializar los documentos base en Firestore:", err.message);
+  }
 }
 
 /**
