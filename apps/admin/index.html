@@ -247,11 +247,11 @@
         </div>
       </div>
 
-      <!-- TABLA GENERAL DE OPERACIÓN CON FILTROS EN VIVO -->
+      <!-- TABLA GENERAL DE OPERACIÓN CON FILTROS EN VIVO Y HASH SHA-256 -->
       <div class="space-y-3">
         <div class="flex items-center justify-between px-1">
           <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
-            <i class="fa-solid fa-table-list text-purple-400"></i> Tabla General de Operaciones
+            <i class="fa-solid fa-shield-halved text-purple-400"></i> Auditoría Criptográfica de Operaciones
           </h3>
         </div>
 
@@ -267,8 +267,8 @@
               </select>
             </div>
             <div>
-              <label class="block text-[10px] text-slate-400 font-semibold mb-1">Buscar (Cliente/PIN):</label>
-              <input type="text" id="filter-search" oninput="applyTableFilters()" placeholder="Ej: 3101234567 o PIN"
+              <label class="block text-[10px] text-slate-400 font-semibold mb-1">Buscar (Cliente/PIN/Hash):</label>
+              <input type="text" id="filter-search" oninput="applyTableFilters()" placeholder="Ej: 3101234567, PIN o Hash"
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-200 outline-none">
             </div>
           </div>
@@ -278,6 +278,7 @@
               <thead class="bg-slate-900 text-purple-300 uppercase font-bold border-b border-slate-800 text-[9px]">
                 <tr>
                   <th class="p-2">ID</th>
+                  <th class="p-2">Hash SHA-256</th>
                   <th class="p-2">Cliente</th>
                   <th class="p-2">Repartidor</th>
                   <th class="p-2">PIN</th>
@@ -287,7 +288,7 @@
               </thead>
               <tbody id="operations-table-body" class="divide-y divide-slate-800/80">
                 <tr>
-                  <td colspan="6" class="p-4 text-center text-slate-500">Cargando operaciones...</td>
+                  <td colspan="7" class="p-4 text-center text-slate-500">Cargando operaciones...</td>
                 </tr>
               </tbody>
             </table>
@@ -484,13 +485,11 @@
     async function approveRecharge(rechargeId, driverId, driverEmail, amount) {
       try {
         if (typeof db !== 'undefined' && db !== null) {
-          // 1. Marcar recarga como aprobada
           await db.collection('recharges').doc(rechargeId).update({
             status: 'approved',
             approved_at: new Date().toISOString()
           });
 
-          // 2. Incrementar saldo del repartidor
           if (driverEmail) {
             const querySnap = await db.collection('users').where('email', '==', driverEmail).get();
             if (!querySnap.empty) {
@@ -576,7 +575,6 @@
     function renderChartJSPlots(pending, assigned, completed, cancelled, totalRevenue) {
       if (typeof Chart === 'undefined') return;
 
-      // 1. CHART DE DONA
       const donutCtx = document.getElementById('donutStatusChart')?.getContext('2d');
       if (donutCtx) {
         if (donutChartInstance) donutChartInstance.destroy();
@@ -605,7 +603,6 @@
         });
       }
 
-      // 2. CHART DE BARRAS HISTÓRICO
       const barCtx = document.getElementById('barStatsChart')?.getContext('2d');
       if (barCtx) {
         if (barChartInstance) barChartInstance.destroy();
@@ -649,8 +646,9 @@
         const clientPhone = (o.client_phone || '').toLowerCase();
         const pin = (o.delivery_pin || '').toLowerCase();
         const desc = (o.task_description || '').toLowerCase();
+        const hash = (o.security_hash || '').toLowerCase();
 
-        const matchesSearch = !searchFilter || clientPhone.includes(searchFilter) || pin.includes(searchFilter) || desc.includes(searchFilter);
+        const matchesSearch = !searchFilter || clientPhone.includes(searchFilter) || pin.includes(searchFilter) || desc.includes(searchFilter) || hash.includes(searchFilter);
 
         return matchesStatus && matchesSearch;
       });
@@ -663,7 +661,7 @@
       if (!tbody) return;
 
       if (orders.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-500">No se encontraron órdenes registradas.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-500">No se encontraron órdenes registradas.</td></tr>`;
         return;
       }
 
@@ -674,9 +672,12 @@
                         st === 'assigned' ? 'text-sky-400 bg-sky-950/80 border-sky-800' :
                         'text-emerald-400 bg-emerald-950/80 border-emerald-800';
 
+        const hashDisplay = o.security_hash ? o.security_hash.substring(0, 10) + '...' : 'SEC-N/A';
+
         return `
           <tr class="hover:bg-slate-900/60 transition-all">
             <td class="p-2 font-mono text-[10px] font-bold text-purple-400">#${o.id.substring(0, 6)}</td>
+            <td class="p-2 font-mono text-[9px] text-purple-300 font-bold" title="${o.security_hash || 'N/A'}">${hashDisplay}</td>
             <td class="p-2">${escapeHtml(o.client_phone || '3100000000')}</td>
             <td class="p-2 text-slate-400">${escapeHtml(o.driver_name || 'N/A')}</td>
             <td class="p-2 font-mono font-bold text-amber-300">${o.delivery_pin || '----'}</td>

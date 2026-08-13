@@ -2,8 +2,8 @@
  * UbaVoy - Configuración Compartida de Firebase Firestore & Auth (Proyecto: ubavoy)
  * 
  * Incluye inicialización de Firestore, Firebase Auth con Google Auth Provider,
- * y script de sembrado de datos iniciales (seedInitialFirestoreData) para las colecciones
- * 'users', 'orders' y 'system_config'.
+ * script de sembrado de datos iniciales (seedInitialFirestoreData) y trazabilidad
+ * criptográfica SHA-256 (generateOrderHash).
  */
 
 const firebaseConfig = {
@@ -63,6 +63,23 @@ try {
 }
 
 /**
+ * GENERADOR DE HASH DE SEGURIDAD Y TRAZABILIDAD CRIPTOGRÁFICA (SHA-256)
+ */
+async function generateOrderHash(orderData) {
+  try {
+    const rawString = `${orderData.client_phone}-${orderData.delivery_pin}-${orderData.created_at}-UBAVOY_SECRET_SALT_2026`;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(rawString);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 24).toUpperCase();
+  } catch (e) {
+    console.error("Error generando hash SHA-256:", e);
+    return 'HASH-' + Math.random().toString(36).substring(2, 14).toUpperCase();
+  }
+}
+
+/**
  * SEMBRADO DE DATOS INICIALES EN FIRESTORE (seedInitialFirestoreData)
  */
 async function seedInitialFirestoreData() {
@@ -103,6 +120,8 @@ async function seedInitialFirestoreData() {
     const orderRef = db.collection('orders').doc('order_demo_001');
     const orderDoc = await orderRef.get();
     if (!orderDoc.exists) {
+      const demoCreatedAt = new Date().toISOString();
+      const demoHash = await generateOrderHash({ client_phone: '3000000000', delivery_pin: '1234', created_at: demoCreatedAt });
       await orderRef.set({
         id: 'order_demo_001',
         client_phone: '3000000000',
@@ -112,6 +131,7 @@ async function seedInitialFirestoreData() {
         estimated_price: 5000,
         status: 'pending',
         delivery_pin: '1234',
+        security_hash: demoHash,
         created_at: firebase.firestore.Timestamp.now()
       });
     }

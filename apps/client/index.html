@@ -272,6 +272,10 @@
             <span class="text-[11px] text-slate-400">Valor Estimado:</span>
             <span id="activeOrderPrice" class="font-extrabold text-emerald-400 text-sm">$5,000 COP</span>
           </div>
+          <div class="flex items-center justify-between pt-1 text-[10px]">
+            <span class="text-slate-500">Hash SHA-256:</span>
+            <span id="activeOrderHashDisplay" class="font-mono text-purple-300 truncate max-w-[150px]">SEC-ORDER-SHA256</span>
+          </div>
         </div>
 
         <!-- MOSTRAR PIN DE SEGURIDAD 4 DÍGITOS PARA ENTREGAR -->
@@ -564,6 +568,7 @@
       }
 
       const generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
+      const createdAtIso = new Date().toISOString();
 
       const newOrder = {
         client_phone: clientPhone,
@@ -574,8 +579,12 @@
         delivery_pin: generatedPin,
         estimated_price: selectedPrice,
         status: 'pending',
-        created_at: new Date().toISOString()
+        created_at: createdAtIso
       };
+
+      if (typeof generateOrderHash === 'function') {
+        newOrder.security_hash = await generateOrderHash(newOrder);
+      }
 
       console.log("🔥 Guardando orden en Firestore (ubavoy)...", newOrder);
 
@@ -613,6 +622,7 @@
         document.getElementById('activeOrderAddress').innerText = order.delivery_address || 'Ubaté';
         document.getElementById('activeOrderPrice').innerText = `$${(order.estimated_price || 5000).toLocaleString()} COP`;
         document.getElementById('deliveryPinDisplay').innerText = order.delivery_pin || '----';
+        document.getElementById('activeOrderHashDisplay').innerText = order.security_hash ? order.security_hash.substring(0, 16) + '...' : 'N/A';
 
         const badge = document.getElementById('activeOrderBadgeStatus');
         const driverCard = document.getElementById('assigned-driver-card');
