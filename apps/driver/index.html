@@ -145,8 +145,8 @@
         </div>
       </div>
 
-      <!-- ALERTA SONORA BANNER CON DIAGNÓSTICO -->
-      <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 space-y-2 shadow-md">
+      <!-- ALERTA SONORA & DIAGNÓSTICO PRUEBA FIRESTORE -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-3 text-xs text-slate-300 space-y-2.5 shadow-md">
         <div class="flex items-center justify-between">
           <span class="flex items-center gap-2">
             <i class="fa-solid fa-volume-high text-amber-400"></i> Alerta Sonora
@@ -156,10 +156,15 @@
           </button>
         </div>
 
-        <!-- BOTÓN DIAGNÓSTICO DE COMPROBACIÓN DIRECTA -->
-        <button onclick="forceReloadOrdersDiagnostic()" class="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all border border-slate-700">
-          <i class="fa-solid fa-rotate-right"></i> 🔄 Forzar Recarga de Carreras (Diagnóstico)
-        </button>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button onclick="forceReloadOrdersDiagnostic()" class="py-2 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] font-bold flex items-center justify-center gap-1 transition-all border border-slate-700">
+            <i class="fa-solid fa-magnifying-glass"></i> Diagnóstico (Count)
+          </button>
+          
+          <button onclick="createTestOrderInFirestore()" class="py-2 px-2.5 rounded-xl bg-emerald-950 hover:bg-emerald-900 text-emerald-400 text-[10px] font-bold flex items-center justify-center gap-1 transition-all border border-emerald-800">
+            <i class="fa-solid fa-flask"></i> 🧪 Pedido de Prueba
+          </button>
+        </div>
       </div>
 
       <!-- MIS CARRERAS ACTIVAS EN CURSO (VALIDACIÓN CON PIN) -->
@@ -575,7 +580,7 @@
       renderOrdersFeed([]);
     }
 
-    // BOTÓN DE DIAGNÓSTICO DIRECTO QUE EJECUTA UN GET A FIRESTORE
+    // BOTÓN DIAGNÓSTICO 1: RECARGA Y CONTEO
     async function forceReloadOrdersDiagnostic() {
       showToast('🔄 Realizando diagnóstico en Firestore...');
       if (!db) {
@@ -594,6 +599,34 @@
         startDriverFirestoreRealtime();
       } catch (err) {
         alert("Error de consulta en Firestore: " + err.message);
+      }
+    }
+
+    // BOTÓN DIAGNÓSTICO 2: CREAR PEDIDO DE PRUEBA EN FIRESTORE
+    async function createTestOrderInFirestore() {
+      showToast('🧪 Creando pedido de prueba en Firestore...');
+      if (!db) {
+        alert("Firestore no está inicializado.");
+        return;
+      }
+      try {
+        const testOrder = {
+          task_description: "Prueba desde Driver (Diagnóstico)",
+          delivery_address: "Plaza Principal Ubaté",
+          client_phone: "3000000000",
+          delivery_coords: { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng },
+          estimated_price: 5000,
+          status: "pending",
+          delivery_pin: "1234",
+          created_at: new Date().toISOString()
+        };
+
+        const docRef = await db.collection("orders").add(testOrder);
+        console.log("🧪 Orden de prueba creada con ID:", docRef.id);
+        alert(`✅ ¡Pedido de prueba creado con éxito en Firestore!\nID: ${docRef.id}`);
+      } catch (err) {
+        console.error("❌ Error creando pedido de prueba:", err);
+        alert("Error de Firestore: " + err.message);
       }
     }
 

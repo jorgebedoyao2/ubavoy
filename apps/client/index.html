@@ -424,7 +424,7 @@
 
   </div>
 
-  <!-- JAVASCRIPT LOGIC PWA CLIENTE CON CONEXIÓN DIRECTA FIRESTORE -->
+  <!-- JAVASCRIPT LOGIC PWA CLIENTE CON CONEXIÓN UNIFICADA FIRESTORE -->
   <script>
     let activeTrackOrderId = localStorage.getItem('ubavoy_active_order_id') || null;
     let leafletMap = null;
@@ -457,7 +457,7 @@
         startOrderTracking(activeTrackOrderId);
       }
 
-      // SUBMIT EVENT DEL FORMULARIO CLIENTE APUNTANDO 100% A FIRESTORE
+      // SUBMIT EVENT DEL FORMULARIO CLIENTE CON INSTANCIA UNIFICADA DB
       const orderForm = document.getElementById('order-form');
       if (orderForm) {
         orderForm.addEventListener('submit', async (e) => {
@@ -487,7 +487,7 @@
               created_at: new Date().toISOString()
             };
 
-            console.log("🔥 Enviando a Firestore:", newOrder);
+            console.log("🔥 Guardando orden en Firestore (ubavoy)...", newOrder);
             
             let docRefId = '';
             if (typeof db !== 'undefined' && db !== null) {
@@ -500,7 +500,7 @@
               throw new Error("Base de datos Firestore no inicializada.");
             }
 
-            console.log("✅ Orden creada con ID:", docRefId);
+            console.log("✅ Orden creada en Firestore con ID:", docRefId);
             showToast("¡Mandado solicitado con éxito en Firestore! ID: " + docRefId);
             
             orderForm.reset();
@@ -945,7 +945,7 @@
         toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-amber-500/50 shadow-2xl flex items-center gap-3';
       } else {
         toastIcon.className = "fa-solid fa-circle-check text-emerald-400 text-base";
-        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-emerald-500/50 shadow-2xl flex items-center gap-3';
+        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-emerald-500/40 shadow-2xl flex items-center gap-3';
       }
 
       toast.classList.remove('hidden');
