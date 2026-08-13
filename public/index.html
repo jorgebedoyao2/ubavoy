@@ -170,12 +170,12 @@
           </span>
         </div>
 
-        <form id="order-form" class="space-y-4">
+        <form id="orderForm" class="space-y-4">
           <div>
             <label class="block text-xs font-semibold text-slate-200 mb-1.5">
               ¿Qué necesitas que llevemos o compremos? <span class="text-rose-400">*</span>
             </label>
-            <textarea id="input-description" required rows="3" 
+            <textarea id="taskDesc" required rows="3" 
               placeholder="Ej: Traer un paquete de la plaza principal, comprar medicamentos en la droguería del centro..."
               class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 outline-none transition-all resize-none shadow-inner"></textarea>
           </div>
@@ -186,7 +186,7 @@
             </label>
             <div class="relative">
               <i class="fa-solid fa-location-crosshairs absolute left-3.5 top-3 text-emerald-400 text-sm"></i>
-              <input type="text" id="input-destination" required placeholder="Ej: Barrio Santa Bárbara, frente a la tienda X"
+              <input type="text" id="deliveryAddress" required placeholder="Ej: Barrio Santa Bárbara, frente a la tienda X"
                 class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 outline-none transition-all">
             </div>
           </div>
@@ -224,7 +224,7 @@
               <label class="block text-xs font-semibold text-slate-200 mb-1">Tu WhatsApp</label>
               <div class="relative">
                 <i class="fa-brands fa-whatsapp absolute left-3 top-2.5 text-emerald-400 text-xs"></i>
-                <input type="tel" id="input-phone" required placeholder="3101234567"
+                <input type="tel" id="clientPhone" required placeholder="3101234567"
                   class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-emerald-500 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-100 outline-none">
               </div>
             </div>
@@ -245,7 +245,7 @@
         </form>
       </div>
 
-      <!-- SECTOR 3: RASTREO EN VIVO -->
+      <!-- SECTOR 3: RASTREO EN VIVO EN TIEMPO REAL -->
       <div id="tracking-section" class="hidden space-y-3">
         <div class="flex items-center justify-between">
           <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
@@ -263,7 +263,8 @@
             <span class="text-[11px] text-emerald-300 font-semibold flex items-center justify-center gap-1.5">
               <i class="fa-solid fa-key text-emerald-400"></i> Código de Entrega (Muestra al Domiciliario):
             </span>
-            <span id="track-delivery-pin" class="font-mono text-3xl font-black text-emerald-400 tracking-widest block">----</span>
+            <span id="deliveryPinDisplay" class="font-mono text-3xl font-black text-emerald-400 tracking-widest block">----</span>
+            <span id="track-delivery-pin" class="hidden font-mono text-3xl font-black text-emerald-400 tracking-widest">----</span>
           </div>
 
           <div class="space-y-1.5">
@@ -281,11 +282,13 @@
           <div class="bg-slate-900/90 rounded-xl p-3 text-xs space-y-1 border border-slate-800">
             <div class="flex justify-between text-slate-300">
               <span>Mandado:</span>
-              <span id="track-description" class="font-semibold text-slate-100 truncate max-w-[180px]">---</span>
+              <span id="activeOrderTask" class="font-semibold text-slate-100 truncate max-w-[180px]">---</span>
+              <span id="track-description" class="hidden font-semibold text-slate-100">---</span>
             </div>
             <div class="flex justify-between text-slate-300">
               <span>Valor:</span>
-              <span id="track-price" class="font-bold text-amber-400">$0 COP</span>
+              <span id="activeOrderPrice" class="font-bold text-amber-400">$0 COP</span>
+              <span id="track-price" class="hidden font-bold text-amber-400">$0 COP</span>
             </div>
           </div>
 
@@ -424,11 +427,12 @@
 
   </div>
 
-  <!-- JAVASCRIPT LOGIC PWA CLIENTE 100% FIRESTORE -->
+  <!-- JAVASCRIPT LOGIC PWA CLIENTE CON RASTREO EN VIVO ONSNAPSHOT -->
   <script>
-    let activeTrackOrderId = localStorage.getItem('ubavoy_active_order_id') || null;
+    let activeTrackOrderId = localStorage.getItem('active_order_id') || localStorage.getItem('ubavoy_active_order_id') || null;
     let leafletMap = null;
     let deliveryCoords = { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
+    let trackingUnsubscribe = null;
 
     let savedAddresses = JSON.parse(localStorage.getItem('ubavoy_saved_addresses') || JSON.stringify([
       { id: 'addr_1', tag: 'Casa', icon: 'fa-house', address: 'Barrio Santa Bárbara, Calle 6 #7-12', detail: 'Apt 201', coords: { lat: 5.3081, lng: -73.8144 } },
@@ -454,29 +458,25 @@
       subscribeFirestoreRealtime();
 
       if (activeTrackOrderId) {
-        startOrderTracking(activeTrackOrderId);
+        trackClientOrder(activeTrackOrderId);
       }
 
-      // MANEJADOR ESTRICTO DE ESCRITURA DIRECTA A FIRESTORE
-      const orderForm = document.getElementById('order-form') || document.getElementById('orderForm');
+      // SUBMIT CON ESCRITURA Y SUSCRIPCIÓN RASTREO EN VIVO
+      const orderForm = document.getElementById('orderForm') || document.getElementById('order-form');
       if (orderForm) {
         orderForm.addEventListener('submit', async (e) => {
           e.preventDefault();
-          console.log("🔥 INICIANDO ESCRITURA REAL EN FIRESTORE...");
-          
-          const taskDesc = document.getElementById('input-description')?.value || document.getElementById('taskDesc')?.value || 'Mandado de prueba';
-          const deliveryAddress = document.getElementById('input-destination')?.value || document.getElementById('deliveryAddress')?.value || 'Ubaté Centro';
-          const clientPhone = document.getElementById('input-phone')?.value?.replace(/[^0-9]/g, '') || document.getElementById('clientPhone')?.value || '3101234567';
+          console.log("🔥 Enviando pedido directamente a Firestore...");
+
+          const taskDesc = document.getElementById('taskDesc')?.value || document.getElementById('input-description')?.value || 'Mandado Exprés';
+          const deliveryAddress = document.getElementById('deliveryAddress')?.value || document.getElementById('input-destination')?.value || 'Ubaté Centro';
+          const clientPhone = document.getElementById('clientPhone')?.value || document.getElementById('input-phone')?.value?.replace(/[^0-9]/g, '') || '3101234567';
           const price = parseInt(document.getElementById('input-price')?.value) || 5000;
 
-          if (!taskDesc || !deliveryAddress) {
-            alert("Por favor completa los campos obligatorios.");
-            return;
-          }
-
           try {
-            const orderPayload = {
+            const newOrder = {
               client_phone: clientPhone,
+              client_uid: currentUser ? currentUser.uid : null,
               task_description: taskDesc,
               delivery_address: deliveryAddress,
               delivery_coords: deliveryCoords || window.currentCoords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng },
@@ -488,30 +488,129 @@
 
             let docRefId = '';
             if (typeof db !== 'undefined' && db !== null) {
-              const docRef = await db.collection("orders").add(orderPayload);
+              const docRef = await db.collection("orders").add(newOrder);
               docRefId = docRef.id;
             } else if (typeof firebase !== 'undefined' && firebase.firestore) {
-              const docRef = await firebase.firestore().collection("orders").add(orderPayload);
+              const docRef = await firebase.firestore().collection("orders").add(newOrder);
               docRefId = docRef.id;
             } else {
-              throw new Error("SDK de Firestore no inicializado.");
+              throw new Error("Base de datos Firestore no disponible.");
             }
 
-            console.log("✅ ESCRITURA EXITOSA! ID:", docRefId);
-            alert("🎉 ¡ORDEN GUARDADA EN FIRESTORE REAL!\nID de Orden: " + docRefId);
+            console.log("✅ Mandado guardado en Firestore con ID:", docRefId);
+            localStorage.setItem('active_order_id', docRefId);
+            localStorage.setItem('ubavoy_active_order_id', docRefId);
+            
+            alert("🎉 ¡Mandado solicitado con éxito en UbaVoy!\nID de Seguimiento: " + docRefId);
             
             orderForm.reset();
-            document.getElementById('input-phone').value = currentUser.phone || '';
+            const phoneInput = document.getElementById('clientPhone') || document.getElementById('input-phone');
+            if (phoneInput) phoneInput.value = currentUser.phone || '';
             renderSavedAddressesPills();
-            if (docRefId) startOrderTracking(docRefId);
 
-          } catch (error) {
-            console.error("❌ ERROR CRÍTICO AL ESCRIBIR EN FIRESTORE:", error);
-            alert("❌ FALLO AL GUARDAR EN FIRESTORE:\n" + error.message);
+            // INICIAR RASTREO EN VIVO INMEDIATO
+            if (docRefId) trackClientOrder(docRefId);
+
+          } catch (err) {
+            console.error("❌ Error guardando en Firestore:", err);
+            alert("Error al conectar con la base de datos: " + err.message);
           }
         });
       }
     });
+
+    // LISTENER ONSNAPSHOT DE ORDEN ACTIVA
+    function trackClientOrder(orderId) {
+      if (!orderId) return;
+      activeTrackOrderId = orderId;
+      localStorage.setItem('active_order_id', orderId);
+      localStorage.setItem('ubavoy_active_order_id', orderId);
+
+      const trackingSec = document.getElementById('tracking-section');
+      if (trackingSec) trackingSec.classList.remove('hidden');
+
+      if (trackingUnsubscribe) trackingUnsubscribe();
+
+      const docRef = (typeof db !== 'undefined' && db !== null) ? db.collection("orders").doc(orderId) : firebase.firestore().collection("orders").doc(orderId);
+
+      trackingUnsubscribe = docRef.onSnapshot((docSnap) => {
+        if (!docSnap.exists) return;
+        const order = docSnap.data();
+        
+        const pinDisplay = document.getElementById('deliveryPinDisplay') || document.getElementById('track-delivery-pin');
+        if (pinDisplay) pinDisplay.innerText = order.delivery_pin || '----';
+
+        const taskDisplay = document.getElementById('activeOrderTask') || document.getElementById('track-description');
+        if (taskDisplay) taskDisplay.innerText = order.task_description || 'Mandado Exprés';
+
+        const priceDisplay = document.getElementById('activeOrderPrice') || document.getElementById('track-price');
+        if (priceDisplay) priceDisplay.innerText = `$${(order.estimated_price || 5000).toLocaleString()} COP`;
+
+        updateProgressBar(order.status);
+        updateDriverAssignedUI(order);
+      }, (err) => {
+        console.error("Error en Snapshot de Rastreo:", err);
+      });
+    }
+
+    function updateProgressBar(status) {
+      const progressBar = document.getElementById('progress-bar');
+      const lblPending = document.getElementById('step-lbl-pending');
+      const lblAssigned = document.getElementById('step-lbl-assigned');
+      const lblTransit = document.getElementById('step-lbl-transit');
+      const lblCompleted = document.getElementById('step-lbl-completed');
+
+      [lblPending, lblAssigned, lblTransit, lblCompleted].forEach(l => { if (l) l.className = 'text-slate-500 font-semibold'; });
+
+      if (!status || status === 'pending') {
+        if (progressBar) progressBar.style.width = '25%';
+        if (lblPending) lblPending.className = 'text-emerald-400 font-bold';
+      } else if (status === 'assigned') {
+        if (progressBar) progressBar.style.width = '50%';
+        if (lblAssigned) lblAssigned.className = 'text-emerald-400 font-bold';
+      } else if (status === 'in_transit') {
+        if (progressBar) progressBar.style.width = '75%';
+        if (lblTransit) lblTransit.className = 'text-emerald-400 font-bold';
+      } else if (status === 'completed') {
+        if (progressBar) progressBar.style.width = '100%';
+        if (lblCompleted) lblCompleted.className = 'text-emerald-400 font-bold';
+      }
+    }
+
+    function updateDriverAssignedUI(order) {
+      const driverCard = document.getElementById('driver-assigned-card');
+      if (!driverCard) return;
+
+      if (order.status === 'assigned' || order.status === 'in_transit' || order.status === 'completed') {
+        driverCard.classList.remove('hidden');
+        const driverName = order.driver_name || (order.driverInfo ? order.driverInfo.name : 'Domiciliario UbaVoy');
+        const driverPhone = order.driver_phone || (order.driverInfo ? order.driverInfo.phone : '3000000000');
+        const driverVehicle = order.driver_vehicle || (order.driverInfo ? order.driverInfo.vehicle : 'Moto Domicilios');
+
+        const nameEl = document.getElementById('assigned-driver-name');
+        const vehicleEl = document.getElementById('assigned-driver-vehicle');
+        const waBtn = document.getElementById('btn-whatsapp-driver');
+
+        if (nameEl) nameEl.innerText = driverName;
+        if (vehicleEl) vehicleEl.innerText = driverVehicle;
+        if (waBtn) {
+          const cleanPhone = driverPhone.replace(/[^0-9]/g, '');
+          const text = encodeURIComponent(`Hola ${driverName}, soy el cliente del pedido en UbaVoy.`);
+          waBtn.href = `https://wa.me/57${cleanPhone}?text=${text}`;
+        }
+      } else {
+        driverCard.classList.add('hidden');
+      }
+    }
+
+    function clearActiveTracking() {
+      activeTrackOrderId = null;
+      localStorage.removeItem('active_order_id');
+      localStorage.removeItem('ubavoy_active_order_id');
+      if (trackingUnsubscribe) trackingUnsubscribe();
+      const trackingSec = document.getElementById('tracking-section');
+      if (trackingSec) trackingSec.classList.add('hidden');
+    }
 
     function initAuthListener() {
       if (typeof auth !== 'undefined' && auth !== null) {
@@ -560,6 +659,7 @@
         updateHeaderUserUI();
         closeAuthModal();
         showToast(`¡Bienvenido ${user.displayName}!`);
+        subscribeFirestoreRealtime();
       } catch (err) {
         console.error("Error Google Auth:", err);
         showToast('No se pudo iniciar sesión con Google', 'error');
@@ -599,7 +699,8 @@
 
       const activeAddr = savedAddresses.find(a => a.id === activeAddressId);
       if (activeAddr) {
-        document.getElementById('input-destination').value = activeAddr.address + (activeAddr.detail ? ` (${activeAddr.detail})` : '');
+        const destInput = document.getElementById('deliveryAddress') || document.getElementById('input-destination');
+        if (destInput) destInput.value = activeAddr.address + (activeAddr.detail ? ` (${activeAddr.detail})` : '');
         deliveryCoords = activeAddr.coords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
         if (leafletMap) {
           leafletMap.setView([deliveryCoords.lat, deliveryCoords.lng], 16);
@@ -732,7 +833,8 @@
 
       document.getElementById('header-user-name').innerText = currentUser.name || 'Ingresar';
       document.getElementById('header-user-phone').innerText = currentUser.email || currentUser.phone || 'Google Auth';
-      document.getElementById('input-phone').value = currentUser.phone || '';
+      const phoneInput = document.getElementById('clientPhone') || document.getElementById('input-phone');
+      if (phoneInput) phoneInput.value = currentUser.phone || '';
     }
 
     function openAuthModal() {
@@ -772,69 +874,12 @@
       subscribeFirestoreRealtime();
     }
 
-    function startOrderTracking(orderId) {
-      activeTrackOrderId = orderId;
-      localStorage.setItem('ubavoy_active_order_id', orderId);
-      document.getElementById('tracking-section').classList.remove('hidden');
-
-      if (typeof db !== 'undefined' && db !== null) {
-        db.collection('orders').doc(orderId).onSnapshot((doc) => {
-          if (doc.exists) updateTrackingUI(doc.data());
-        });
-      }
-    }
-
-    function updateTrackingUI(order) {
-      const desc = order.task_description || order.description || '---';
-      const price = order.estimated_price || order.estimatedPrice || 0;
-
-      document.getElementById('track-description').innerText = desc;
-      document.getElementById('track-price').innerText = '$' + price.toLocaleString() + ' COP';
-      document.getElementById('track-delivery-pin').innerText = order.delivery_pin || '----';
-
-      const progressBar = document.getElementById('progress-bar');
-      const driverCard = document.getElementById('driver-assigned-card');
-
-      const lblPending = document.getElementById('step-lbl-pending');
-      const lblAssigned = document.getElementById('step-lbl-assigned');
-      const lblTransit = document.getElementById('step-lbl-transit');
-      const lblCompleted = document.getElementById('step-lbl-completed');
-
-      [lblPending, lblAssigned, lblTransit, lblCompleted].forEach(l => l.className = 'text-slate-500 font-semibold');
-
-      if (order.status === 'pending') {
-        progressBar.style.width = '25%';
-        lblPending.className = 'text-emerald-400 font-bold';
-        driverCard.classList.add('hidden');
-      } else if (order.status === 'assigned' || order.status === 'in_transit') {
-        progressBar.style.width = order.status === 'assigned' ? '50%' : '75%';
-        (order.status === 'assigned' ? lblAssigned : lblTransit).className = 'text-emerald-400 font-bold';
-        driverCard.classList.remove('hidden');
-        
-        const driverName = order.driver_name || (order.driverInfo ? order.driverInfo.name : 'Domiciliario UbaVoy');
-        const driverPhone = order.driver_phone || (order.driverInfo ? order.driverInfo.phone : '3000000000');
-        const driverVehicle = order.driver_vehicle || (order.driverInfo ? order.driverInfo.vehicle : 'Moto Domicilios');
-
-        document.getElementById('assigned-driver-name').innerText = driverName;
-        document.getElementById('assigned-driver-vehicle').innerText = driverVehicle;
-        const cleanPhone = driverPhone.replace(/[^0-9]/g, '');
-        const text = encodeURIComponent(`Hola ${driverName}, soy el cliente del pedido #${order.id || ''} en UbaVoy.`);
-        document.getElementById('btn-whatsapp-driver').href = `https://wa.me/57${cleanPhone}?text=${text}`;
-      } else if (order.status === 'completed') {
-        progressBar.style.width = '100%';
-        lblCompleted.className = 'text-emerald-400 font-bold';
-        driverCard.classList.remove('hidden');
-      }
-    }
-
-    function clearActiveTracking() {
-      activeTrackOrderId = null;
-      localStorage.removeItem('ubavoy_active_order_id');
-      document.getElementById('tracking-section').classList.add('hidden');
-    }
-
+    // CONSULTA Y SUSCRIPCIÓN EN TIEMPO REAL AL HISTORIAL DE MANDADOS
     function subscribeFirestoreRealtime() {
       if (typeof db === 'undefined' || db === null) return;
+
+      const currentPhone = currentUser ? currentUser.phone : '3101234567';
+
       db.collection('orders')
         .onSnapshot((snapshot) => {
           const allOrders = [];
@@ -844,6 +889,8 @@
             allOrders.push(data);
           });
           renderClientHistory(allOrders);
+        }, (err) => {
+          console.error("Error suscribiendo al historial de Firestore:", err);
         });
     }
 
@@ -851,11 +898,16 @@
       const feed = document.getElementById('client-history-feed');
       const badge = document.getElementById('client-total-orders-badge');
       
+      const currentPhone = currentUser ? currentUser.phone : '';
+      const currentUid = currentUser ? currentUser.uid : '';
+
       const myOrders = allOrders.filter(o => 
-        (o.client_phone && o.client_phone === currentUser.phone) ||
-        (o.client_uid && o.client_uid === currentUser.uid) ||
-        (o.customerPhone && o.customerPhone === currentUser.phone)
+        (o.client_phone && o.client_phone === currentPhone) ||
+        (o.client_uid && o.client_uid === currentUid) ||
+        (o.customerPhone && o.customerPhone === currentPhone)
       );
+
+      myOrders.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
       badge.innerText = `${myOrders.length} Pedidos`;
 
       if (myOrders.length === 0) {
@@ -912,8 +964,10 @@
       db.collection('orders').doc(orderId).get().then(doc => {
         if (doc.exists) {
           const order = doc.data();
-          document.getElementById('input-description').value = order.task_description || '';
-          document.getElementById('input-destination').value = order.delivery_address || '';
+          const descInput = document.getElementById('taskDesc') || document.getElementById('input-description');
+          const destInput = document.getElementById('deliveryAddress') || document.getElementById('input-destination');
+          if (descInput) descInput.value = order.task_description || '';
+          if (destInput) destInput.value = order.delivery_address || '';
           document.getElementById('input-price').value = order.estimated_price || 5000;
 
           if (order.delivery_coords) {
