@@ -140,15 +140,6 @@
       </button>
     </header>
 
-    <!-- BANNER MODOS DATABASE -->
-    <div id="db-status-banner" class="hidden bg-slate-900 border-b border-slate-800 px-4 py-1.5 text-[11px] text-slate-400 flex items-center justify-between">
-      <span class="flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-        <span id="db-status-text">⚡ Base de datos en línea (ubavoy)</span>
-      </span>
-      <button onclick="dismissBanner()" class="text-slate-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-
     <!-- MAIN CONTENT CLIENTE -->
     <main class="flex-1 px-4 py-4 space-y-5">
 
@@ -179,7 +170,7 @@
           </span>
         </div>
 
-        <form id="order-form" onsubmit="handleCreateOrder(event)" class="space-y-4">
+        <form id="order-form" class="space-y-4">
           <div>
             <label class="block text-xs font-semibold text-slate-200 mb-1.5">
               ¿Qué necesitas que llevemos o compremos? <span class="text-rose-400">*</span>
@@ -425,7 +416,7 @@
       </div>
     </div>
 
-    <!-- TOAST NOTIFICACIONES -->
+    <!-- TOAST NOTIFICACIONES DE ALERTA -->
     <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-emerald-500/40 shadow-xl flex items-center gap-3">
       <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
       <span id="toast-message" class="flex-1">Operación exitosa</span>
@@ -433,9 +424,8 @@
 
   </div>
 
-  <!-- JAVASCRIPT LOGIC PWA CLIENTE CON PIN DE SEGURIDAD Y GOOGLE AUTH -->
+  <!-- JAVASCRIPT LOGIC PWA CLIENTE CON CONEXIÓN DIRECTA FIRESTORE -->
   <script>
-    let isFirebaseReady = false;
     let activeTrackOrderId = localStorage.getItem('ubavoy_active_order_id') || null;
     let leafletMap = null;
     let deliveryCoords = { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
@@ -455,18 +445,74 @@
       role: 'client'
     }));
 
-    let localOrders = JSON.parse(localStorage.getItem('ubavoy_local_orders') || '[]');
-
     document.addEventListener('DOMContentLoaded', () => {
       updateHeaderUserUI();
-      checkFirebaseStatus();
       registerServiceWorker();
       renderSavedAddressesPills();
       initLeafletMapUberStyle();
       initAuthListener();
+      subscribeFirestoreRealtime();
 
       if (activeTrackOrderId) {
         startOrderTracking(activeTrackOrderId);
+      }
+
+      // SUBMIT EVENT DEL FORMULARIO CLIENTE APUNTANDO 100% A FIRESTORE
+      const orderForm = document.getElementById('order-form');
+      if (orderForm) {
+        orderForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          const taskDesc = document.getElementById('input-description')?.value.trim() || '';
+          const deliveryAddress = document.getElementById('input-destination')?.value.trim() || '';
+          const clientPhone = document.getElementById('input-phone')?.value.trim().replace(/[^0-9]/g, '') || '3000000000';
+          const price = parseInt(document.getElementById('input-price')?.value) || 5000;
+          
+          if (!taskDesc || !deliveryAddress) {
+            showToast("Por favor completa los campos obligatorios.", "error");
+            return;
+          }
+
+          try {
+            const newOrder = {
+              task_description: taskDesc,
+              delivery_address: deliveryAddress,
+              client_phone: clientPhone,
+              client_uid: currentUser ? currentUser.uid : null,
+              client_email: currentUser ? currentUser.email : null,
+              delivery_coords: deliveryCoords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng },
+              estimated_price: price,
+              status: 'pending',
+              delivery_pin: Math.floor(1000 + Math.random() * 9000).toString(),
+              created_at: new Date().toISOString()
+            };
+
+            console.log("🔥 Enviando a Firestore:", newOrder);
+            
+            let docRefId = '';
+            if (typeof db !== 'undefined' && db !== null) {
+              const docRef = await db.collection("orders").add(newOrder);
+              docRefId = docRef.id;
+            } else if (typeof firebase !== 'undefined' && firebase.firestore) {
+              const docRef = await firebase.firestore().collection("orders").add(newOrder);
+              docRefId = docRef.id;
+            } else {
+              throw new Error("Base de datos Firestore no inicializada.");
+            }
+
+            console.log("✅ Orden creada con ID:", docRefId);
+            showToast("¡Mandado solicitado con éxito en Firestore! ID: " + docRefId);
+            
+            orderForm.reset();
+            document.getElementById('input-phone').value = currentUser.phone || '';
+            renderSavedAddressesPills();
+            if (docRefId) startOrderTracking(docRefId);
+            
+          } catch (error) {
+            console.error("❌ Error de Firestore:", error);
+            showToast("Fallo al guardar en la base de datos: " + error.message, "error");
+          }
+        });
       }
     });
 
@@ -482,7 +528,7 @@
             localStorage.setItem('ubavoy_current_user', JSON.stringify(currentUser));
             updateHeaderUserUI();
 
-            if (isFirebaseReady) {
+            if (typeof db !== 'undefined' && db !== null) {
               db.collection('users').doc(user.uid).set({
                 uid: user.uid,
                 email: user.email,
@@ -534,29 +580,6 @@
         closeAuthModal();
         showToast('Sesión cerrada');
       } catch (err) {}
-    }
-
-    function checkFirebaseStatus() {
-      const banner = document.getElementById('db-status-banner');
-      const text = document.getElementById('db-status-text');
-
-      if (typeof db !== 'undefined' && db !== null && firebaseConfig.apiKey !== "AIzaSyYOUR_API_KEY_HERE") {
-        isFirebaseReady = true;
-        banner.classList.remove('hidden');
-        banner.className = "bg-emerald-950/90 border-b border-emerald-800 px-4 py-1 text-[11px] text-emerald-300 flex items-center justify-between";
-        text.innerHTML = '<i class="fa-solid fa-cloud-check text-emerald-400"></i> ⚡ Base de datos en línea (ubavoy)';
-        setTimeout(() => banner.classList.add('hidden'), 4000);
-        subscribeFirestoreRealtime();
-      } else {
-        isFirebaseReady = false;
-        banner.classList.remove('hidden');
-        text.innerText = "Modo Demo Local (LocalStorage habilitado)";
-        renderLocalStateAll();
-      }
-    }
-
-    function dismissBanner() {
-      document.getElementById('db-status-banner').classList.add('hidden');
     }
 
     function renderSavedAddressesPills() {
@@ -739,7 +762,7 @@
       currentUser.phone = phone;
       localStorage.setItem('ubavoy_current_user', JSON.stringify(currentUser));
 
-      if (isFirebaseReady) {
+      if (typeof db !== 'undefined' && db !== null) {
         try {
           const docId = currentUser.uid || phone;
           await db.collection('users').doc(docId).set(currentUser, { merge: true });
@@ -749,59 +772,7 @@
       updateHeaderUserUI();
       closeAuthModal();
       showToast(`¡Perfil de ${name} guardado!`);
-      if (isFirebaseReady) subscribeFirestoreRealtime();
-      else renderLocalStateAll();
-    }
-
-    async function handleCreateOrder(e) {
-      e.preventDefault();
-      const description = document.getElementById('input-description').value.trim();
-      const destination = document.getElementById('input-destination').value.trim();
-      const phone = document.getElementById('input-phone').value.trim().replace(/[^0-9]/g, '');
-      const price = parseInt(document.getElementById('input-price').value);
-
-      if (!description || !destination || !phone || !price) {
-        showToast('Por favor completa todos los campos', 'error');
-        return;
-      }
-
-      // GENERACIÓN AUTOMÁTICA DEL PIN DE ENTREGA (4 DÍGITOS)
-      const deliveryPin = Math.floor(1000 + Math.random() * 9000).toString();
-
-      const newOrder = {
-        id: 'UB-' + Math.floor(100000 + Math.random() * 900000),
-        delivery_pin: deliveryPin,
-        client_uid: currentUser.uid || null,
-        client_email: currentUser.email || null,
-        client_phone: phone,
-        task_description: description,
-        delivery_address: destination,
-        delivery_coords: deliveryCoords,
-        estimated_price: price,
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        assigned_driver_id: null,
-        driver_phone: null,
-        driver_name: null
-      };
-
-      try {
-        if (isFirebaseReady) {
-          await db.collection('orders').doc(newOrder.id).set(newOrder);
-        } else {
-          localOrders.unshift(newOrder);
-          localStorage.setItem('ubavoy_local_orders', JSON.stringify(localOrders));
-          renderLocalStateAll();
-        }
-
-        showToast('¡Pedido publicado exitosamente en Ubaté! 🚀');
-        document.getElementById('order-form').reset();
-        document.getElementById('input-phone').value = currentUser.phone;
-        renderSavedAddressesPills();
-        startOrderTracking(newOrder.id);
-      } catch (err) {
-        showToast('Error al crear pedido.', 'error');
-      }
+      subscribeFirestoreRealtime();
     }
 
     function startOrderTracking(orderId) {
@@ -809,13 +780,10 @@
       localStorage.setItem('ubavoy_active_order_id', orderId);
       document.getElementById('tracking-section').classList.remove('hidden');
 
-      if (isFirebaseReady) {
+      if (typeof db !== 'undefined' && db !== null) {
         db.collection('orders').doc(orderId).onSnapshot((doc) => {
           if (doc.exists) updateTrackingUI(doc.data());
         });
-      } else {
-        const order = localOrders.find(o => o.id === orderId);
-        if (order) updateTrackingUI(order);
       }
     }
 
@@ -853,7 +821,7 @@
         document.getElementById('assigned-driver-name').innerText = driverName;
         document.getElementById('assigned-driver-vehicle').innerText = driverVehicle;
         const cleanPhone = driverPhone.replace(/[^0-9]/g, '');
-        const text = encodeURIComponent(`Hola ${driverName}, soy el cliente del pedido #${order.id} en UbaVoy.`);
+        const text = encodeURIComponent(`Hola ${driverName}, soy el cliente del pedido #${order.id || ''} en UbaVoy.`);
         document.getElementById('btn-whatsapp-driver').href = `https://wa.me/57${cleanPhone}?text=${text}`;
       } else if (order.status === 'completed') {
         progressBar.style.width = '100%';
@@ -869,16 +837,17 @@
     }
 
     function subscribeFirestoreRealtime() {
+      if (typeof db === 'undefined' || db === null) return;
       db.collection('orders')
         .onSnapshot((snapshot) => {
           const allOrders = [];
-          snapshot.forEach(doc => allOrders.push(doc.data()));
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            data.id = doc.id;
+            allOrders.push(data);
+          });
           renderClientHistory(allOrders);
         });
-    }
-
-    function renderLocalStateAll() {
-      renderClientHistory(localOrders);
     }
 
     function renderClientHistory(allOrders) {
@@ -895,7 +864,7 @@
       if (myOrders.length === 0) {
         feed.innerHTML = `
           <div class="glass-card rounded-xl p-4 text-center text-xs text-slate-400">
-            No tienes pedidos registrados.
+            No tienes pedidos registrados en Firestore.
           </div>
         `;
         return;
@@ -942,22 +911,23 @@
     }
 
     function repeatOrder(orderId) {
-      let order = localOrders.find(o => o.id === orderId);
+      if (!db) return;
+      db.collection('orders').doc(orderId).get().then(doc => {
+        if (doc.exists) {
+          const order = doc.data();
+          document.getElementById('input-description').value = order.task_description || '';
+          document.getElementById('input-destination').value = order.delivery_address || '';
+          document.getElementById('input-price').value = order.estimated_price || 5000;
 
-      if (order) {
-        document.getElementById('input-description').value = order.task_description || order.description || '';
-        document.getElementById('input-destination').value = order.delivery_address || order.destination || '';
-        document.getElementById('input-price').value = order.estimated_price || order.estimatedPrice || 5000;
+          if (order.delivery_coords) {
+            deliveryCoords = order.delivery_coords;
+            if (leafletMap) leafletMap.setView([deliveryCoords.lat, deliveryCoords.lng], 16);
+          }
 
-        const coords = order.delivery_coords || order.destinationCoords;
-        if (coords) {
-          deliveryCoords = coords;
-          if (leafletMap) leafletMap.setView([deliveryCoords.lat, deliveryCoords.lng], 16);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          showToast('🔄 Mandado precargado en el formulario. ¡Presiona Solicitar!');
         }
-
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        showToast('🔄 Mandado precargado en el formulario. ¡Presiona Solicitar!');
-      }
+      });
     }
 
     function showToast(message, type = 'success') {
@@ -966,8 +936,17 @@
       const toastIcon = document.getElementById('toast-icon');
 
       toastMsg.innerText = message;
-      toastIcon.className = type === 'error' ? "fa-solid fa-circle-exclamation text-rose-400 text-base" : "fa-solid fa-circle-check text-emerald-400 text-base";
-      toast.className = `fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border ${type === 'error' ? 'border-rose-500/50' : 'border-emerald-500/50'} shadow-2xl flex items-center gap-3`;
+
+      if (type === 'error') {
+        toastIcon.className = "fa-solid fa-circle-exclamation text-rose-400 text-base";
+        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-rose-500/50 shadow-2xl flex items-center gap-3';
+      } else if (type === 'warning') {
+        toastIcon.className = "fa-solid fa-triangle-exclamation text-amber-400 text-base";
+        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-amber-500/50 shadow-2xl flex items-center gap-3';
+      } else {
+        toastIcon.className = "fa-solid fa-circle-check text-emerald-400 text-base";
+        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-emerald-500/50 shadow-2xl flex items-center gap-3';
+      }
 
       toast.classList.remove('hidden');
       setTimeout(() => toast.classList.add('hidden'), 4000);
