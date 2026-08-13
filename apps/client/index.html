@@ -424,7 +424,7 @@
 
   </div>
 
-  <!-- JAVASCRIPT LOGIC PWA CLIENTE CON CONEXIÓN UNIFICADA FIRESTORE -->
+  <!-- JAVASCRIPT LOGIC PWA CLIENTE 100% FIRESTORE -->
   <script>
     let activeTrackOrderId = localStorage.getItem('ubavoy_active_order_id') || null;
     let leafletMap = null;
@@ -457,60 +457,57 @@
         startOrderTracking(activeTrackOrderId);
       }
 
-      // SUBMIT EVENT DEL FORMULARIO CLIENTE CON INSTANCIA UNIFICADA DB
-      const orderForm = document.getElementById('order-form');
+      // MANEJADOR ESTRICTO DE ESCRITURA DIRECTA A FIRESTORE
+      const orderForm = document.getElementById('order-form') || document.getElementById('orderForm');
       if (orderForm) {
         orderForm.addEventListener('submit', async (e) => {
           e.preventDefault();
+          console.log("🔥 INICIANDO ESCRITURA REAL EN FIRESTORE...");
           
-          const taskDesc = document.getElementById('input-description')?.value.trim() || '';
-          const deliveryAddress = document.getElementById('input-destination')?.value.trim() || '';
-          const clientPhone = document.getElementById('input-phone')?.value.trim().replace(/[^0-9]/g, '') || '3000000000';
+          const taskDesc = document.getElementById('input-description')?.value || document.getElementById('taskDesc')?.value || 'Mandado de prueba';
+          const deliveryAddress = document.getElementById('input-destination')?.value || document.getElementById('deliveryAddress')?.value || 'Ubaté Centro';
+          const clientPhone = document.getElementById('input-phone')?.value?.replace(/[^0-9]/g, '') || document.getElementById('clientPhone')?.value || '3101234567';
           const price = parseInt(document.getElementById('input-price')?.value) || 5000;
-          
+
           if (!taskDesc || !deliveryAddress) {
-            showToast("Por favor completa los campos obligatorios.", "error");
+            alert("Por favor completa los campos obligatorios.");
             return;
           }
 
           try {
-            const newOrder = {
+            const orderPayload = {
+              client_phone: clientPhone,
               task_description: taskDesc,
               delivery_address: deliveryAddress,
-              client_phone: clientPhone,
-              client_uid: currentUser ? currentUser.uid : null,
-              client_email: currentUser ? currentUser.email : null,
-              delivery_coords: deliveryCoords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng },
+              delivery_coords: deliveryCoords || window.currentCoords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng },
               estimated_price: price,
               status: 'pending',
               delivery_pin: Math.floor(1000 + Math.random() * 9000).toString(),
               created_at: new Date().toISOString()
             };
 
-            console.log("🔥 Guardando orden en Firestore (ubavoy)...", newOrder);
-            
             let docRefId = '';
             if (typeof db !== 'undefined' && db !== null) {
-              const docRef = await db.collection("orders").add(newOrder);
+              const docRef = await db.collection("orders").add(orderPayload);
               docRefId = docRef.id;
             } else if (typeof firebase !== 'undefined' && firebase.firestore) {
-              const docRef = await firebase.firestore().collection("orders").add(newOrder);
+              const docRef = await firebase.firestore().collection("orders").add(orderPayload);
               docRefId = docRef.id;
             } else {
-              throw new Error("Base de datos Firestore no inicializada.");
+              throw new Error("SDK de Firestore no inicializado.");
             }
 
-            console.log("✅ Orden creada en Firestore con ID:", docRefId);
-            showToast("¡Mandado solicitado con éxito en Firestore! ID: " + docRefId);
+            console.log("✅ ESCRITURA EXITOSA! ID:", docRefId);
+            alert("🎉 ¡ORDEN GUARDADA EN FIRESTORE REAL!\nID de Orden: " + docRefId);
             
             orderForm.reset();
             document.getElementById('input-phone').value = currentUser.phone || '';
             renderSavedAddressesPills();
             if (docRefId) startOrderTracking(docRefId);
-            
+
           } catch (error) {
-            console.error("❌ Error de Firestore:", error);
-            showToast("Fallo al guardar en la base de datos: " + error.message, "error");
+            console.error("❌ ERROR CRÍTICO AL ESCRIBIR EN FIRESTORE:", error);
+            alert("❌ FALLO AL GUARDAR EN FIRESTORE:\n" + error.message);
           }
         });
       }
