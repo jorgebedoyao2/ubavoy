@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ubavoy-driver-v10.1';
+const CACHE_NAME = 'ubavoy-driver-v10.2';
 const ASSETS_TO_CACHE = [
   '/apps/driver/manifest.json',
   '/icon-192.svg',
@@ -26,6 +26,31 @@ self.addEventListener('activate', (event) => {
         })
       );
     }).then(() => self.clients.claim())
+  );
+});
+
+// NOTIFICACIONES PUSH CON PANTALLA APAGADA
+self.addEventListener('push', function(event) {
+  const data = event.data ? event.data.json() : { title: '🚨 ¡NUEVO MANDADO EN UBATÉ!', body: 'Hay una nueva carrera disponible en la bolsa de trabajo.' };
+  const options = {
+    body: data.body,
+    icon: '/icon-192.svg',
+    badge: '/icon-192.svg',
+    vibrate: [500, 200, 500, 200, 1000],
+    tag: 'new-order-alert',
+    renotify: true,
+    data: { url: '/apps/driver/' }
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  event.waitUntil(
+    clients.openWindow(event.notification.data.url || '/apps/driver/')
   );
 });
 
