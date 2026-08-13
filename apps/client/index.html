@@ -258,7 +258,7 @@
         </div>
 
         <div class="glass-card rounded-2xl p-4 border border-emerald-500/30 space-y-3 shadow-xl">
-          <!-- BLOQUE DE CÓDIGO DE ENTREGA PIN DESTACADO -->
+          <!-- BLOQUE DE CÓDIGO DE ENTREGA PIN DESTACADO DE 4 DÍGITOS -->
           <div class="bg-emerald-950/90 border border-emerald-500/50 rounded-xl p-3 text-center space-y-1 shadow-inner">
             <span class="text-[11px] text-emerald-300 font-semibold flex items-center justify-center gap-1.5">
               <i class="fa-solid fa-key text-emerald-400"></i> Código de Entrega (Muestra al Domiciliario):
@@ -292,9 +292,10 @@
             </div>
           </div>
 
-          <div id="driver-assigned-card" class="hidden bg-slate-900 border border-emerald-500/40 rounded-xl p-3 space-y-2">
+          <!-- FICHA DEL DOMICILIARIO ASIGNADO CON BOTONES WHATSAPP Y MAPA UBICACIÓN EN VIVO -->
+          <div id="driver-assigned-card" class="hidden bg-slate-900 border border-emerald-500/40 rounded-xl p-3 space-y-2.5">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-lg font-bold">
+              <div class="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-lg font-bold">
                 <i class="fa-solid fa-helmet-safety"></i>
               </div>
               <div class="flex-1 min-w-0">
@@ -303,11 +304,19 @@
               </div>
             </div>
 
-            <a id="btn-whatsapp-driver" href="#" target="_blank"
-              class="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all">
-              <i class="fa-brands fa-whatsapp text-sm"></i>
-              <span>Contactar por WhatsApp</span>
-            </a>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <a id="btn-whatsapp-driver" href="#" target="_blank"
+                class="py-2 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-md transition-all">
+                <i class="fa-brands fa-whatsapp text-sm"></i>
+                <span>💬 Contactar WhatsApp</span>
+              </a>
+
+              <button id="btn-live-map-driver" type="button" onclick="triggerOpenLiveMapModal()"
+                class="py-2 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-sky-500/40 text-sky-400 text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-md transition-all">
+                <i class="fa-solid fa-map-location-dot"></i>
+                <span>🗺️ Ubicación en Vivo</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -325,6 +334,30 @@
       </div>
 
     </main>
+
+    <!-- MODAL MAPA UBICACIÓN EN VIVO (CLIENTE RASTREA AL DOMICILIARIO EN LEAFLET) -->
+    <div id="live-map-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-emerald-500/50 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
+            <i class="fa-solid fa-map-location-dot text-emerald-400"></i> Ubicación del Domiciliario en Vivo
+          </h3>
+          <button onclick="closeLiveMapModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div class="relative w-full rounded-2xl overflow-hidden border border-slate-700 shadow-xl">
+          <div id="live-tracking-map" class="h-64 w-full bg-slate-900"></div>
+        </div>
+
+        <p class="text-[11px] text-slate-400 text-center">
+          <i class="fa-solid fa-circle-info text-emerald-400"></i> Muestra la ruta entre el punto de entrega y la posición del domiciliario en Ubaté.
+        </p>
+
+        <button onclick="closeLiveMapModal()" class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700">
+          Cerrar Mapa
+        </button>
+      </div>
+    </div>
 
     <!-- MODAL NUEVA DIRECCIÓN -->
     <div id="address-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
@@ -427,11 +460,12 @@
 
   </div>
 
-  <!-- JAVASCRIPT LOGIC PWA CLIENTE CON RASTREO EN VIVO ONSNAPSHOT -->
+  <!-- JAVASCRIPT LOGIC PWA CLIENTE CON RASTREO EN VIVO Y MAPA EN VIVO -->
   <script>
     let activeTrackOrderId = localStorage.getItem('active_order_id') || localStorage.getItem('ubavoy_active_order_id') || null;
     let leafletMap = null;
     let deliveryCoords = { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
+    let currentOrderData = null;
     let trackingUnsubscribe = null;
 
     let savedAddresses = JSON.parse(localStorage.getItem('ubavoy_saved_addresses') || JSON.stringify([
@@ -535,19 +569,20 @@
 
       trackingUnsubscribe = docRef.onSnapshot((docSnap) => {
         if (!docSnap.exists) return;
-        const order = docSnap.data();
+        currentOrderData = docSnap.data();
+        currentOrderData.id = docSnap.id;
         
         const pinDisplay = document.getElementById('deliveryPinDisplay') || document.getElementById('track-delivery-pin');
-        if (pinDisplay) pinDisplay.innerText = order.delivery_pin || '----';
+        if (pinDisplay) pinDisplay.innerText = currentOrderData.delivery_pin || '----';
 
         const taskDisplay = document.getElementById('activeOrderTask') || document.getElementById('track-description');
-        if (taskDisplay) taskDisplay.innerText = order.task_description || 'Mandado Exprés';
+        if (taskDisplay) taskDisplay.innerText = currentOrderData.task_description || 'Mandado Exprés';
 
         const priceDisplay = document.getElementById('activeOrderPrice') || document.getElementById('track-price');
-        if (priceDisplay) priceDisplay.innerText = `$${(order.estimated_price || 5000).toLocaleString()} COP`;
+        if (priceDisplay) priceDisplay.innerText = `$${(currentOrderData.estimated_price || 5000).toLocaleString()} COP`;
 
-        updateProgressBar(order.status);
-        updateDriverAssignedUI(order);
+        updateProgressBar(currentOrderData.status);
+        updateDriverAssignedUI(currentOrderData);
       }, (err) => {
         console.error("Error en Snapshot de Rastreo:", err);
       });
@@ -583,9 +618,9 @@
 
       if (order.status === 'assigned' || order.status === 'in_transit' || order.status === 'completed') {
         driverCard.classList.remove('hidden');
-        const driverName = order.driver_name || (order.driverInfo ? order.driverInfo.name : 'Domiciliario UbaVoy');
-        const driverPhone = order.driver_phone || (order.driverInfo ? order.driverInfo.phone : '3000000000');
-        const driverVehicle = order.driver_vehicle || (order.driverInfo ? order.driverInfo.vehicle : 'Moto Domicilios');
+        const driverName = order.driver_name || (order.driverInfo ? order.driverInfo.name : 'Carlos Domiciliario');
+        const driverPhone = order.driver_phone || (order.driverInfo ? order.driverInfo.phone : '3100000000');
+        const driverVehicle = order.driver_vehicle || (order.driverInfo ? order.driverInfo.vehicle : 'Moto FZ 150 - ABC-123');
 
         const nameEl = document.getElementById('assigned-driver-name');
         const vehicleEl = document.getElementById('assigned-driver-vehicle');
@@ -601,6 +636,62 @@
       } else {
         driverCard.classList.add('hidden');
       }
+    }
+
+    function triggerOpenLiveMapModal() {
+      if (!currentOrderData) {
+        showToast('No hay una orden activa seleccionada', 'error');
+        return;
+      }
+      const coords = currentOrderData.delivery_coords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
+      openLiveMapModal(coords, currentOrderData.driver_coords);
+    }
+
+    function openLiveMapModal(coords, driverCoords) {
+      const modal = document.getElementById('live-map-modal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+
+      setTimeout(() => {
+        if (!window.liveMapInstance) {
+          window.liveMapInstance = L.map('live-tracking-map', { zoomControl: false }).setView([coords.lat, coords.lng], 15);
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            subdomains: 'abcd',
+            attribution: '&copy; CartoDB &copy; OpenStreetMap'
+          }).addTo(window.liveMapInstance);
+        } else {
+          window.liveMapInstance.setView([coords.lat, coords.lng], 15);
+        }
+
+        if (window.liveMapDeliveryMarker) window.liveMapInstance.removeLayer(window.liveMapDeliveryMarker);
+        if (window.liveMapDriverMarker) window.liveMapInstance.removeLayer(window.liveMapDriverMarker);
+
+        // Marker Punto de Entrega
+        window.liveMapDeliveryMarker = L.marker([coords.lat, coords.lng]).addTo(window.liveMapInstance)
+          .bindPopup("<b>📍 Punto de Entrega</b>").openPopup();
+
+        // Marker Domiciliario (Posición real o simulada para prueba)
+        const drvLat = driverCoords ? driverCoords.lat : (coords.lat + 0.002);
+        const drvLng = driverCoords ? driverCoords.lng : (coords.lng + 0.002);
+        
+        const driverIcon = L.divIcon({
+          html: '<div style="background:#f59e0b;color:#0f172a;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid white;font-size:16px;box-shadow:0 0 10px rgba(245,158,11,0.8)"><i class="fa-solid fa-motorcycle"></i></div>',
+          className: 'driver-live-icon',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16]
+        });
+
+        window.liveMapDriverMarker = L.marker([drvLat, drvLng], { icon: driverIcon }).addTo(window.liveMapInstance)
+          .bindPopup("<b>🛵 Domiciliario UbaVoy</b>");
+
+        window.liveMapInstance.invalidateSize();
+      }, 200);
+    }
+
+    function closeLiveMapModal() {
+      const modal = document.getElementById('live-map-modal');
+      if (modal) modal.classList.add('hidden');
     }
 
     function clearActiveTracking() {
