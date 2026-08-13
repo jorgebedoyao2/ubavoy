@@ -71,6 +71,17 @@
       -webkit-backdrop-filter: blur(24px);
       border-bottom: 1px solid rgba(245, 158, 11, 0.25);
     }
+
+    /* EFECTO PARPADEO NEÓN DESTACADO PARA NUEVAS CARRERAS */
+    @keyframes neonFlash {
+      0% { background-color: rgba(16, 185, 129, 0.45); border-color: #10b981; box-shadow: 0 0 25px #10b981; }
+      50% { background-color: rgba(245, 158, 11, 0.45); border-color: #f59e0b; box-shadow: 0 0 25px #f59e0b; }
+      100% { background-color: rgba(16, 185, 129, 0.45); border-color: #10b981; box-shadow: 0 0 25px #10b981; }
+    }
+    .neon-flash-alert {
+      animation: neonFlash 0.5s infinite alternate;
+      border-radius: 1rem;
+    }
   </style>
 </head>
 <body class="h-full bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950">
@@ -128,7 +139,7 @@
             </span>
           </div>
 
-          <!-- BOTÓN INTERRUPTOR (TOGGLE) -->
+          <!-- BOTÓN INTERRUPTOR (TOGGLE) CON SOLICITUD DE PERMISOS -->
           <button id="btn-toggle-availability" onclick="toggleAvailability()"
             class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-extrabold text-xs border border-slate-700 shadow-md transition-all active:scale-95 flex items-center gap-2">
             <i class="fa-solid fa-power-off text-amber-400"></i>
@@ -148,11 +159,11 @@
         </div>
 
         <div class="flex items-center justify-between">
-          <span class="flex items-center gap-2">
-            <i class="fa-solid fa-volume-high text-amber-400"></i> Alerta Sonora
+          <span class="flex items-center gap-2 text-xs text-slate-300 font-semibold">
+            <i class="fa-solid fa-volume-high text-amber-400"></i> Alerta Sonora y Vibración
           </span>
-          <button onclick="playAlarmSound()" class="text-[11px] bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm">
-            Probar Sonido 🎵
+          <button onclick="triggerNewOrderAlert(null)" class="text-[11px] bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm">
+            Probar Alerta 🎵📳
           </button>
         </div>
 
@@ -322,7 +333,7 @@
 
   </div>
 
-  <!-- JAVASCRIPT DOMICILIARIO CON GOOGLE MAPS Y WAZE -->
+  <!-- JAVASCRIPT DOMICILIARIO CON SISTEMA MULTICAPA DE NOTIFICACIONES -->
   <script>
     let isAvailable = false;
     let unsubscribeOrders = null;
@@ -350,16 +361,74 @@
       startDriverFirestoreRealtime();
     });
 
+    // 1. ACTIVAR PERMISOS Y DESBLOQUEAR AUDIOCONTEXT AL CAMBIAR A 'DISPONIBLE'
     function toggleAvailability() {
       isAvailable = !isAvailable;
       updateAvailabilityUI();
 
       if (isAvailable) {
+        // a) Desbloquear Audio Web API
+        playAlarmSound();
+
+        // b) Solicitar Permisos de Notificación del Sistema
+        if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+          Notification.requestPermission();
+        }
+
         startDriverFirestoreRealtime();
         showToast('🟢 ¡Estás DISPONIBLE para recibir carreras!');
       } else {
         stopDriverFirestoreRealtime();
         showToast('🔴 Has pasado a estado EN PAUSA.', 'warning');
+      }
+    }
+
+    // 2. SISTEMA MULTICAPA DE ALERTA (SONIDO + VIBRACIÓN + NOTIFICACIÓN WEB + PARPADEO NEÓN)
+    function triggerNewOrderAlert(order) {
+      // a) Sonido de Alerta Sirena Chime
+      playAlarmSound();
+
+      // b) Vibración Háctica Móvil
+      if ("vibrate" in navigator) {
+        try {
+          navigator.vibrate([500, 200, 500, 200, 1000]);
+        } catch (e) {}
+      }
+
+      // c) Notificación Push / Web System API
+      if ("Notification" in window && Notification.permission === "granted") {
+        try {
+          const taskDesc = order ? (order.task_description || order.description || 'Mandado Exprés') : 'Nuevo Mandado Libre';
+          const addr = order ? (order.delivery_address || order.destination || 'Ubaté Centro') : 'Ubaté';
+          
+          new Notification("🚨 ¡NUEVO MANDADO EN UBATÉ!", {
+            body: `${taskDesc} - ${addr}`,
+            icon: "/icon-192.svg",
+            vibrate: [500, 200, 500]
+          });
+        } catch (e) {}
+      }
+
+      // d) Indicador Visual Destacado Parpadeo Neón
+      triggerNeonFlashingEffect();
+    }
+
+    function triggerNeonFlashingEffect() {
+      const container = document.getElementById('orders-feed');
+      const header = document.querySelector('header');
+
+      if (container) container.classList.add('neon-flash-alert');
+      if (header) header.classList.add('neon-flash-alert');
+
+      setTimeout(() => {
+        if (container) container.classList.remove('neon-flash-alert');
+        if (header) header.classList.remove('neon-flash-alert');
+      }, 6000);
+    }
+
+    function playAlarmSound() {
+      if (typeof playNewOrderSound === 'function') {
+        playNewOrderSound();
       }
     }
 
@@ -526,8 +595,11 @@
         const countBadge = document.getElementById('available-count-badge');
         if (countBadge) countBadge.innerText = `${pendingOrders.length} Libres`;
 
+        // 3. DETECCION EN TIEMPO REAL CON SISTEMA MULTICAPA DE ALERTA
         if (!isInitialLoad && snapshot.docChanges().some(change => change.type === "added")) {
-          playAlarmSound();
+          const addedChange = snapshot.docChanges().find(change => change.type === "added");
+          const addedOrder = addedChange ? addedChange.doc.data() : null;
+          triggerNewOrderAlert(addedOrder);
         }
         isInitialLoad = false;
 
