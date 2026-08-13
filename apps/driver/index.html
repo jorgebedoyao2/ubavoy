@@ -46,9 +46,10 @@
     }
   </script>
 
-  <!-- Firebase Compatibility SDKs (v10) -->
+  <!-- Firebase Compatibility SDKs (v10: App, Firestore, Auth) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   
   <!-- Shared Firebase Config File -->
   <script src="/shared/firebase_config.js"></script>
@@ -93,9 +94,10 @@
         </div>
       </div>
 
-      <!-- BOTÓN MI PERFIL / VEHÍCULO -->
+      <!-- BOTÓN MI PERFIL / GOOGLE AUTH -->
       <button onclick="openAuthModal()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl px-3 py-1.5 flex items-center gap-2 transition-all shadow-md">
-        <i class="fa-solid fa-id-badge text-amber-400 text-lg"></i>
+        <img id="header-driver-avatar" src="" class="w-6 h-6 rounded-full hidden border border-amber-500/50" alt="Avatar">
+        <i id="header-driver-icon" class="fa-solid fa-id-badge text-amber-400 text-lg"></i>
         <div class="text-left leading-tight">
           <p id="header-user-name" class="text-[11px] font-bold text-slate-200 truncate max-w-[100px]">Repartidor</p>
           <p id="header-user-vehicle" class="text-[9px] text-amber-400 truncate max-w-[90px]">Moto N/A</p>
@@ -103,13 +105,17 @@
       </button>
     </header>
 
-    <!-- BANNER MODOS DATABASE -->
-    <div id="db-status-banner" class="hidden bg-slate-900 border-b border-slate-800 px-4 py-1.5 text-[11px] text-slate-400 flex items-center justify-between">
-      <span class="flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-        <span id="db-status-text">⚡ Base de datos en línea (ubavoy)</span>
+    <!-- SWITCH / TOGGLE DE DISPONIBILIDAD EN TIEMPO REAL -->
+    <div class="bg-slate-900/95 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shadow-md">
+      <span class="text-xs font-bold text-slate-200 flex items-center gap-2">
+        <i class="fa-solid fa-signal text-amber-400"></i> Estado de Trabajo:
       </span>
-      <button onclick="dismissBanner()" class="text-slate-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+
+      <button id="availability-toggle-btn" onclick="toggleDriverAvailability()"
+        class="px-3.5 py-1.5 rounded-xl text-xs font-black tracking-wide border flex items-center gap-2 transition-all shadow-lg bg-emerald-950 text-emerald-300 border-emerald-500/50">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+        <span>🟢 DISPONIBLE</span>
+      </button>
     </div>
 
     <!-- MAIN CONTENT DOMICILIARIO -->
@@ -186,7 +192,7 @@
 
     </main>
 
-    <!-- MODAL AUTH / REGISTRO DOMICILIARIO -->
+    <!-- MODAL AUTH CON GOOGLE Y REGISTRO DOMICILIARIO -->
     <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
       <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-slate-700 shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -194,6 +200,25 @@
             <i class="fa-solid fa-id-card text-amber-400"></i> Registro de Domiciliario
           </h3>
           <button onclick="closeAuthModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <!-- BOTÓN GOOGLE AUTH -->
+        <div class="space-y-3">
+          <button type="button" onclick="handleGoogleSignInDriver()" class="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs flex items-center justify-center gap-3 shadow-lg transition-all active:scale-[0.98]">
+            <svg class="w-4 h-4" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span>Iniciar Sesión con Google</span>
+          </button>
+
+          <div class="flex items-center gap-2 my-2">
+            <hr class="flex-1 border-slate-800">
+            <span class="text-[10px] text-slate-500 uppercase font-semibold">o ingresar datos</span>
+            <hr class="flex-1 border-slate-800">
+          </div>
         </div>
 
         <form onsubmit="handleSaveAuthDriver(event)" class="space-y-3.5 text-xs">
@@ -218,6 +243,12 @@
           <button type="submit" class="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md">
             <i class="fa-solid fa-check"></i> Guardar Perfil de Repartidor
           </button>
+
+          <div id="logout-btn-container" class="hidden pt-2 border-t border-slate-800 text-center">
+            <button type="button" onclick="handleSignOutDriver()" class="text-xs text-rose-400 hover:text-rose-300 font-bold">
+              <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -261,12 +292,16 @@
 
   </div>
 
-  <!-- JAVASCRIPT LOGIC PWA DOMICILIARIO CON VALIDACIÓN DE PIN -->
+  <!-- JAVASCRIPT LOGIC PWA DOMICILIARIO 100% FIRESTORE -->
   <script>
-    let isFirebaseReady = false;
     let previousPendingCount = 0;
+    let isAvailable = true;
+    let unsubscribeOrders = null;
 
     let currentDriver = JSON.parse(localStorage.getItem('ubavoy_driver_user') || JSON.stringify({
+      uid: null,
+      email: null,
+      photoURL: null,
       phone: '3109876543',
       name: 'Carlos Mario (Domiciliario)',
       role: 'driver',
@@ -275,35 +310,99 @@
       vehicle: 'Moto Yamaha FZ 150 - ABC-12D'
     }));
 
-    let localOrders = JSON.parse(localStorage.getItem('ubavoy_local_orders') || '[]');
-
     document.addEventListener('DOMContentLoaded', () => {
       updateHeaderUserUI();
-      checkFirebaseStatus();
       registerServiceWorker();
+      initAuthListenerDriver();
+      startDriverFirestoreRealtime();
     });
 
-    function checkFirebaseStatus() {
-      const banner = document.getElementById('db-status-banner');
-      const text = document.getElementById('db-status-text');
+    function initAuthListenerDriver() {
+      if (typeof auth !== 'undefined' && auth !== null) {
+        auth.onAuthStateChanged((user) => {
+          if (user) {
+            currentDriver.uid = user.uid;
+            currentDriver.email = user.email;
+            currentDriver.name = user.displayName || currentDriver.name;
+            currentDriver.photoURL = user.photoURL;
 
-      if (typeof db !== 'undefined' && db !== null && firebaseConfig.apiKey !== "AIzaSyYOUR_API_KEY_HERE") {
-        isFirebaseReady = true;
-        banner.classList.remove('hidden');
-        banner.className = "bg-amber-950/90 border-b border-amber-800 px-4 py-1 text-[11px] text-amber-300 flex items-center justify-between";
-        text.innerHTML = '<i class="fa-solid fa-cloud-check text-amber-400"></i> ⚡ Base de datos en línea (ubavoy)';
-        setTimeout(() => banner.classList.add('hidden'), 4000);
-        subscribeFirestoreRealtime();
-      } else {
-        isFirebaseReady = false;
-        banner.classList.remove('hidden');
-        text.innerText = "Modo Demo Local (LocalStorage habilitado)";
-        renderLocalStateAll();
+            localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
+            updateHeaderUserUI();
+
+            if (typeof db !== 'undefined' && db !== null) {
+              db.collection('users').doc(user.uid).set({
+                uid: user.uid,
+                email: user.email,
+                name: currentDriver.name,
+                photoURL: user.photoURL,
+                role: 'driver',
+                vehicle: currentDriver.vehicle || 'Moto',
+                is_approved: currentDriver.is_approved !== false,
+                balance: currentDriver.balance || 10000,
+                last_login: new Date().toISOString()
+              }, { merge: true });
+            }
+          } else {
+            currentDriver.uid = null;
+            currentDriver.email = null;
+            currentDriver.photoURL = null;
+            updateHeaderUserUI();
+          }
+        });
       }
     }
 
-    function dismissBanner() {
-      document.getElementById('db-status-banner').classList.add('hidden');
+    async function handleGoogleSignInDriver() {
+      try {
+        showToast('Iniciando sesión con Google...');
+        const result = await signInWithGoogle();
+        const user = result.user;
+        
+        currentDriver.uid = user.uid;
+        currentDriver.email = user.email;
+        currentDriver.name = user.displayName;
+        currentDriver.photoURL = user.photoURL;
+
+        localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
+        updateHeaderUserUI();
+        closeAuthModal();
+        showToast(`¡Bienvenido ${user.displayName}!`);
+        startDriverFirestoreRealtime();
+      } catch (err) {
+        console.error("Error Google Auth:", err);
+        showToast('No se pudo iniciar sesión con Google', 'error');
+      }
+    }
+
+    async function handleSignOutDriver() {
+      try {
+        await signOutUser();
+        stopDriverFirestoreRealtime();
+        currentDriver.uid = null;
+        currentDriver.email = null;
+        currentDriver.photoURL = null;
+        localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
+        updateHeaderUserUI();
+        closeAuthModal();
+        showToast('Sesión cerrada');
+      } catch (err) {}
+    }
+
+    function toggleDriverAvailability() {
+      isAvailable = !isAvailable;
+      const btn = document.getElementById('availability-toggle-btn');
+      
+      if (isAvailable) {
+        btn.className = "px-3.5 py-1.5 rounded-xl text-xs font-black tracking-wide border flex items-center gap-2 transition-all shadow-lg bg-emerald-950 text-emerald-300 border-emerald-500/50";
+        btn.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span> 🟢 DISPONIBLE`;
+        startDriverFirestoreRealtime();
+        showToast('🟢 Ahora estás disponible para escuchar carreras');
+      } else {
+        btn.className = "px-3.5 py-1.5 rounded-xl text-xs font-black tracking-wide border flex items-center gap-2 transition-all shadow-lg bg-rose-950 text-rose-300 border-rose-500/50";
+        btn.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> 🔴 EN PAUSA`;
+        stopDriverFirestoreRealtime();
+        showToast('🔴 Sistema en pausa (no escucharás nuevas carreras)', 'warning');
+      }
     }
 
     function registerServiceWorker() {
@@ -313,8 +412,27 @@
     }
 
     function updateHeaderUserUI() {
+      const avatarImg = document.getElementById('header-driver-avatar');
+      const userIcon = document.getElementById('header-driver-icon');
+      const logoutContainer = document.getElementById('logout-btn-container');
+
+      if (currentDriver.photoURL) {
+        avatarImg.src = currentDriver.photoURL;
+        avatarImg.classList.remove('hidden');
+        userIcon.classList.add('hidden');
+      } else {
+        avatarImg.classList.add('hidden');
+        userIcon.classList.remove('hidden');
+      }
+
+      if (currentDriver.uid) {
+        logoutContainer.classList.remove('hidden');
+      } else {
+        logoutContainer.classList.add('hidden');
+      }
+
       document.getElementById('header-user-name').innerText = currentDriver.name || 'Repartidor';
-      document.getElementById('header-user-vehicle').innerText = currentDriver.vehicle || 'Sin vehículo';
+      document.getElementById('header-user-vehicle').innerText = currentDriver.vehicle || 'Moto N/A';
       updateDriverBalanceUI();
     }
 
@@ -353,40 +471,42 @@
         return;
       }
 
-      currentDriver = {
-        phone,
-        name,
-        role: 'driver',
-        vehicle: vehicle || 'Moto Domicilios',
-        is_approved: currentDriver.phone === phone ? currentDriver.is_approved : true,
-        balance: currentDriver.phone === phone ? (currentDriver.balance || 10000) : 10000
-      };
+      currentDriver.name = name;
+      currentDriver.phone = phone;
+      currentDriver.vehicle = vehicle || 'Moto';
 
       localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
 
-      if (isFirebaseReady) {
+      if (typeof db !== 'undefined' && db !== null) {
         try {
-          await db.collection('users').doc(phone).set(currentDriver, { merge: true });
+          const docId = currentDriver.uid || phone;
+          await db.collection('users').doc(docId).set(currentDriver, { merge: true });
         } catch (err) {}
       }
 
       updateHeaderUserUI();
       closeAuthModal();
       showToast(`¡Perfil de Domiciliario ${name} guardado!`);
-      if (isFirebaseReady) subscribeFirestoreRealtime();
-      else renderLocalStateAll();
+      startDriverFirestoreRealtime();
     }
 
-    function subscribeFirestoreRealtime() {
-      db.collection('orders').onSnapshot((snapshot) => {
+    function startDriverFirestoreRealtime() {
+      if (!isAvailable || typeof db === 'undefined' || db === null) return;
+
+      stopDriverFirestoreRealtime();
+
+      unsubscribeOrders = db.collection('orders').onSnapshot((snapshot) => {
         const pendingOrders = [];
         const assignedOrders = [];
+        const driverId = currentDriver.uid || currentDriver.phone;
 
         snapshot.forEach(doc => {
           const o = doc.data();
+          o.id = doc.id;
+
           if (o.status === 'pending') {
             pendingOrders.push(o);
-          } else if ((o.status === 'assigned' || o.status === 'in_transit') && o.assigned_driver_id === currentDriver.phone) {
+          } else if ((o.status === 'assigned' || o.status === 'in_transit') && (o.assigned_driver_id === driverId || o.driver_phone === currentDriver.phone)) {
             assignedOrders.push(o);
           }
         });
@@ -401,8 +521,9 @@
         renderAssignedOrdersFeed(assignedOrders);
       });
 
-      if (currentDriver.phone) {
-        db.collection('users').doc(currentDriver.phone).onSnapshot((doc) => {
+      const driverDocId = currentDriver.uid || currentDriver.phone;
+      if (driverDocId) {
+        db.collection('users').doc(driverDocId).onSnapshot((doc) => {
           if (doc.exists) {
             currentDriver = { ...currentDriver, ...doc.data() };
             localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
@@ -412,11 +533,12 @@
       }
     }
 
-    function renderLocalStateAll() {
-      const pending = localOrders.filter(o => o.status === 'pending');
-      const assigned = localOrders.filter(o => (o.status === 'assigned' || o.status === 'in_transit') && o.assigned_driver_id === currentDriver.phone);
-      renderOrdersFeed(pending);
-      renderAssignedOrdersFeed(assigned);
+    function stopDriverFirestoreRealtime() {
+      if (unsubscribeOrders) {
+        unsubscribeOrders();
+        unsubscribeOrders = null;
+      }
+      renderOrdersFeed([]);
     }
 
     function renderOrdersFeed(orders) {
@@ -424,18 +546,29 @@
       const badge = document.getElementById('available-count-badge');
       badge.innerText = `${orders.length} Libres`;
 
+      if (!isAvailable) {
+        feed.innerHTML = `
+          <div class="glass-card rounded-2xl p-6 text-center space-y-2">
+            <i class="fa-solid fa-circle-pause text-2xl text-rose-500 animate-pulse mb-1 block"></i>
+            <p class="text-xs text-rose-300 font-bold">Estás en PAUSA.</p>
+            <p class="text-[11px] text-slate-400">Activa el switch a 'DISPONIBLE' para recibir carreras.</p>
+          </div>
+        `;
+        return;
+      }
+
       if (orders.length === 0) {
         feed.innerHTML = `
           <div class="glass-card rounded-2xl p-6 text-center space-y-2">
-            <i class="fa-solid fa-radar text-2xl text-slate-600 animate-pulse mb-1 block"></i>
-            <p class="text-xs text-slate-400">No hay carreras libres en este momento en Ubaté.</p>
+            <i class="fa-solid fa-radar text-2xl text-amber-500 animate-pulse mb-1 block"></i>
+            <p class="text-xs text-slate-400">Escuchando nuevas carreras libres en tiempo real en Ubaté...</p>
           </div>
         `;
         return;
       }
 
       feed.innerHTML = orders.map(order => {
-        const coords = order.delivery_coords || order.destinationCoords || { lat: 5.3081, lng: -73.8144 };
+        const coords = order.delivery_coords || order.destinationCoords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
         const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`;
         const desc = order.task_description || order.description || 'Mandado UbaVoy';
         const addr = order.delivery_address || order.destination || 'Ubaté';
@@ -492,7 +625,7 @@
 
       section.classList.remove('hidden');
       feed.innerHTML = orders.map(order => {
-        const coords = order.delivery_coords || order.destinationCoords || { lat: 5.3081, lng: -73.8144 };
+        const coords = order.delivery_coords || order.destinationCoords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
         const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`;
         const desc = order.task_description || order.description || 'Mandado UbaVoy';
         const addr = order.delivery_address || order.destination || 'Ubaté';
@@ -562,26 +695,20 @@
       localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
       updateDriverBalanceUI();
 
+      const driverIdentifier = currentDriver.uid || currentDriver.phone;
       const updateData = {
         status: 'assigned',
-        assigned_driver_id: currentDriver.phone,
-        driver_phone: currentDriver.phone,
+        assigned_driver_id: driverIdentifier,
+        driver_phone: currentDriver.phone || '',
         driver_name: currentDriver.name || 'Domiciliario UbaVoy',
         driver_vehicle: currentDriver.vehicle || 'Moto Domicilios',
         assigned_at: new Date().toISOString()
       };
 
       try {
-        if (isFirebaseReady) {
+        if (typeof db !== 'undefined' && db !== null) {
           await db.collection('orders').doc(orderId).update(updateData);
-          await db.collection('users').doc(currentDriver.phone).set({ balance: newBalance }, { merge: true });
-        } else {
-          const idx = localOrders.findIndex(o => o.id === orderId);
-          if (idx !== -1) {
-            localOrders[idx] = { ...localOrders[idx], ...updateData };
-            localStorage.setItem('ubavoy_local_orders', JSON.stringify(localOrders));
-            renderLocalStateAll();
-          }
+          await db.collection('users').doc(driverIdentifier).set({ balance: newBalance }, { merge: true });
         }
 
         showToast('¡Carrera Aceptada! Solicita el PIN de 4 dígitos al cliente.');
@@ -599,18 +726,14 @@
         return;
       }
 
-      // SI SE ESTÁ EN FIREBASE, VERIFICA DIRECTAMENTE EL DOCUMENTO
       let realPin = expectedPin;
-      if (isFirebaseReady) {
+      if (typeof db !== 'undefined' && db !== null) {
         try {
           const doc = await db.collection('orders').doc(orderId).get();
           if (doc.exists && doc.data().delivery_pin) {
             realPin = doc.data().delivery_pin;
           }
         } catch (err) {}
-      } else {
-        const ord = localOrders.find(o => o.id === orderId);
-        if (ord && ord.delivery_pin) realPin = ord.delivery_pin;
       }
 
       if (enteredPin !== realPin) {
@@ -618,21 +741,12 @@
         return;
       }
 
-      // PIN CORRECTO -> FINALIZAR ENTREGA
       try {
-        if (isFirebaseReady) {
+        if (typeof db !== 'undefined' && db !== null) {
           await db.collection('orders').doc(orderId).update({
             status: 'completed',
             completed_at: new Date().toISOString()
           });
-        } else {
-          const idx = localOrders.findIndex(o => o.id === orderId);
-          if (idx !== -1) {
-            localOrders[idx].status = 'completed';
-            localOrders[idx].completed_at = new Date().toISOString();
-            localStorage.setItem('ubavoy_local_orders', JSON.stringify(localOrders));
-            renderLocalStateAll();
-          }
         }
 
         showToast('🎉 ¡Entrega confirmada con éxito!');
@@ -656,8 +770,9 @@
       localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
       updateDriverBalanceUI();
 
-      if (isFirebaseReady && currentDriver.phone) {
-        db.collection('users').doc(currentDriver.phone).set({ balance: currentDriver.balance }, { merge: true });
+      const driverDocId = currentDriver.uid || currentDriver.phone;
+      if (typeof db !== 'undefined' && db !== null && driverDocId) {
+        db.collection('users').doc(driverDocId).set({ balance: currentDriver.balance }, { merge: true });
       }
 
       showToast(`¡Solicitud de recarga de $${amount.toLocaleString()} COP realizada!`);
@@ -670,8 +785,17 @@
       const toastIcon = document.getElementById('toast-icon');
 
       toastMsg.innerText = message;
-      toastIcon.className = type === 'error' ? "fa-solid fa-circle-exclamation text-rose-400 text-base" : "fa-solid fa-circle-check text-amber-400 text-base";
-      toast.className = `fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border ${type === 'error' ? 'border-rose-500/50' : 'border-amber-500/50'} shadow-2xl flex items-center gap-3`;
+
+      if (type === 'error') {
+        toastIcon.className = "fa-solid fa-circle-exclamation text-rose-400 text-base";
+        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-rose-500/50 shadow-2xl flex items-center gap-3';
+      } else if (type === 'warning') {
+        toastIcon.className = "fa-solid fa-triangle-exclamation text-amber-400 text-base";
+        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-amber-500/50 shadow-2xl flex items-center gap-3';
+      } else {
+        toastIcon.className = "fa-solid fa-circle-check text-amber-400 text-base";
+        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-xs w-full px-4 py-3 rounded-xl bg-slate-900 text-slate-100 text-xs font-semibold border border-amber-500/50 shadow-2xl flex items-center gap-3';
+      }
 
       toast.classList.remove('hidden');
       setTimeout(() => toast.classList.add('hidden'), 4000);

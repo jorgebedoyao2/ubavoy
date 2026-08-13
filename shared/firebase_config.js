@@ -64,7 +64,6 @@ try {
 
 /**
  * SEMBRADO DE DATOS INICIALES EN FIRESTORE (seedInitialFirestoreData)
- * Crea los documentos base en las colecciones 'users', 'orders' y 'system_config' si no existen.
  */
 async function seedInitialFirestoreData() {
   if (!db || firebaseConfig.apiKey === "AIzaSyYOUR_API_KEY_HERE") {
