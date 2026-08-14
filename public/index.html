@@ -181,7 +181,7 @@
           </span>
         </div>
 
-        <form id="orderForm" class="space-y-3.5">
+        <form id="orderForm" onsubmit="return false;" class="space-y-3.5">
           <!-- TELÉFONO CLIENTE / WHATSAPP -->
           <div>
             <label class="block text-xs font-semibold text-slate-300 mb-1">Tu Número WhatsApp (+57)</label>
@@ -208,8 +208,8 @@
             <!-- CONTENEDOR VISUAL DEL MAPA Y BOTÓN GPS -->
             <div class="mb-2">
               <label class="block text-xs font-semibold text-slate-300 mb-1">🗺️ Ubicación exacta en el Mapa (Ubaté)</label>
-              <div id="map" class="w-full h-48 rounded-xl border border-slate-700/60 overflow-hidden mb-2 z-0"></div>
-              <button type="button" id="locateMeBtn" onclick="getCurrentLocationClient()" class="w-full bg-slate-800/80 border border-emerald-500/30 text-emerald-400 text-xs py-2 rounded-xl mb-4 flex items-center justify-center gap-2 hover:bg-slate-700/80 transition">
+              <div id="map" style="height: 220px; width: 100%;" class="rounded-xl border border-slate-700/60 overflow-hidden mb-2 z-0"></div>
+              <button type="button" id="locateMeBtn" class="w-full bg-slate-800/80 border border-emerald-500/30 text-emerald-400 text-xs py-2 rounded-xl mb-4 flex items-center justify-center gap-2 hover:bg-slate-700/80 transition">
                 📍 Fijar mi Ubicación Actual en Ubaté
               </button>
             </div>
@@ -234,7 +234,7 @@
           </div>
 
           <!-- BOTÓN SUBMIT CON ESTIMACIÓN -->
-          <button type="submit" id="submitOrderBtn"
+          <button type="button" id="submitOrderBtn"
             class="w-full bg-emerald-500 text-slate-950 font-bold py-3.5 rounded-xl shadow-lg hover:bg-emerald-400 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
             🚀 Pedir Domiciliario ($<span id="estimatedPriceDisplay">5.000</span> COP)
           </button>
@@ -449,55 +449,80 @@
 
     function bindOrderFormSubmitHandler() {
       const orderForm = document.getElementById('orderForm') || document.querySelector('form');
+      const submitBtn = document.getElementById('submitOrderBtn');
+
+      const handleOrderSubmit = async (e) => {
+        if (e) {
+          e.preventDefault();
+          if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        }
+
+        console.log("🚀 Ejecutando envío JS a Firestore sin recarga de página...");
+
+        const taskDesc = document.getElementById('taskDesc')?.value?.trim();
+        const deliveryAddress = document.getElementById('deliveryAddress')?.value?.trim();
+        const clientPhone = document.getElementById('clientPhone')?.value?.trim() || '3044834698';
+
+        if (!taskDesc || !deliveryAddress) {
+          alert("Por favor completa la descripción del mandado y la dirección de entrega.");
+          return;
+        }
+
+        const deliveryPin = Math.floor(1000 + Math.random() * 9000).toString();
+        const targetDb = (typeof db !== 'undefined' && db) ? db : (window.db || null);
+
+        console.log("🔥 1. INICIANDO CONEXIÓN A FIRESTORE...", { db: targetDb, taskDesc, deliveryAddress, clientPhone });
+
+        const newOrder = {
+          client_phone: clientPhone,
+          task_description: taskDesc,
+          delivery_address: deliveryAddress,
+          delivery_coords: window.currentCoords || { lat: 5.3081, lng: -73.8144 },
+          estimated_price: selectedPrice || 5000,
+          status: 'pending',
+          delivery_pin: deliveryPin,
+          created_at: new Date().toISOString()
+        };
+
+        if (typeof generateOrderHash === 'function') {
+          try {
+            newOrder.security_hash = await generateOrderHash(newOrder);
+          } catch (hErr) {}
+        }
+
+        try {
+          const collRef = collection(targetDb || db, "orders");
+          const docRef = await addDoc(collRef, newOrder);
+          console.log("✅ ORDEN CREADA EN FIRESTORE ID:", docRef.id);
+
+          localStorage.setItem('ubavoy_active_order_id', docRef.id);
+          localStorage.setItem('ubavoy_active_order', docRef.id);
+
+          alert(`🎉 ¡MANDADO SOLICITADO CON ÉXITO!\n\nPIN de Entrega: ${deliveryPin}\nID Firestore: ${docRef.id}`);
+
+          if (typeof window.trackClientOrder === 'function') {
+            window.trackClientOrder(docRef.id);
+          }
+
+          if (orderForm && typeof orderForm.reset === 'function') {
+            orderForm.reset();
+          }
+          if (document.getElementById('clientPhone')) {
+            document.getElementById('clientPhone').value = clientPhone;
+          }
+
+        } catch (error) {
+          console.error("❌ Error guardando en Firestore:", error);
+          alert("Error de conexión a la base de datos: " + error.message);
+        }
+      };
+
+      if (submitBtn) {
+        submitBtn.addEventListener('click', handleOrderSubmit);
+      }
 
       if (orderForm) {
-        orderForm.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          console.log("🔥 Guardando pedido en Firestore...");
-
-          const taskDesc = document.getElementById('taskDesc')?.value || 'Mandado Exprés';
-          const deliveryAddress = document.getElementById('deliveryAddress')?.value || 'Ubaté Centro';
-          const clientPhone = document.getElementById('clientPhone')?.value || '3044834698';
-          const deliveryPin = Math.floor(1000 + Math.random() * 9000).toString();
-
-          try {
-            const orderPayload = {
-              client_phone: clientPhone,
-              task_description: taskDesc,
-              delivery_address: deliveryAddress,
-              delivery_coords: window.currentCoords || { lat: 5.3081, lng: -73.8144 },
-              estimated_price: selectedPrice || 5000,
-              status: 'pending',
-              delivery_pin: deliveryPin,
-              created_at: new Date().toISOString()
-            };
-
-            if (typeof generateOrderHash === 'function') {
-              orderPayload.security_hash = await generateOrderHash(orderPayload);
-            }
-
-            const docRef = await addDoc(collection(db, "orders"), orderPayload);
-            console.log("✅ PEDIDO CREADO EXITOSAMENTE CON ID:", docRef.id);
-
-            localStorage.setItem('ubavoy_active_order', docRef.id);
-            localStorage.setItem('ubavoy_active_order_id', docRef.id);
-            
-            // Activar rastreo en vivo si la función existe
-            if (typeof window.trackClientOrder === 'function') {
-              window.trackClientOrder(docRef.id);
-            }
-
-            alert(`🎉 ¡Mandado solicitado con éxito!\nCódigo de Entrega (PIN): ${deliveryPin}`);
-            orderForm.reset();
-            if (document.getElementById('clientPhone')) {
-              document.getElementById('clientPhone').value = '3044834698';
-            }
-            
-          } catch (err) {
-            console.error("❌ Error al guardar en Firestore:", err);
-            alert("Fallo al enviar pedido: " + err.message);
-          }
-        });
+        orderForm.addEventListener('submit', handleOrderSubmit);
       }
     }
 
