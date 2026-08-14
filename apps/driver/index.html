@@ -51,7 +51,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   
   <!-- Shared Firebase Config & PWA Installer Engine -->
+  <script src="../../shared/firebase_config.js"></script>
   <script src="/shared/firebase_config.js"></script>
+  <script src="../../shared/pwa_installer.js"></script>
   <script src="/shared/pwa_installer.js"></script>
 
   <style>
@@ -762,21 +764,22 @@
     }
 
     function startDriverFirestoreRealtime() {
-      if (!isAvailable || typeof db === 'undefined' || db === null) return;
+      const targetDb = (typeof db !== 'undefined' && db) ? db : (window.db || null);
+      if (!isAvailable || !targetDb) return;
 
       stopDriverFirestoreRealtime();
       isInitialLoad = true;
 
-      const ordersRef = db.collection('orders');
+      const ordersRef = (typeof collection === 'function') ? collection(targetDb, "orders") : targetDb.collection('orders');
 
-      unsubscribeOrders = ordersRef.onSnapshot((snapshot) => {
+      unsubscribeOrders = onSnapshot(ordersRef, (snapshot) => {
         const pendingOrders = [];
         const assignedOrders = [];
         const driverId = currentDriver.uid || currentDriver.phone;
 
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          data.id = doc.id;
+        snapshot.forEach(docSnap => {
+          const data = typeof docSnap.data === 'function' ? docSnap.data() : docSnap;
+          data.id = docSnap.id;
 
           const st = data.status ? data.status.toString().toLowerCase() : '';
           

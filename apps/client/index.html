@@ -65,7 +65,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   
   <!-- Shared Firebase Config File & Universal PWA Installer -->
+  <script src="../../shared/firebase_config.js"></script>
   <script src="/shared/firebase_config.js"></script>
+  <script src="../../shared/pwa_installer.js"></script>
   <script src="/shared/pwa_installer.js"></script>
 
   <style>
@@ -460,48 +462,56 @@
         orderForm.addEventListener('submit', async (e) => {
           e.preventDefault();
 
-          const taskDesc = document.getElementById('taskDesc')?.value?.trim() || 'Mandado Exprés';
+          const taskDesc = document.getElementById('taskDesc')?.value?.trim() || 'Mandado Exprés de Prueba';
           const deliveryAddress = document.getElementById('deliveryAddress')?.value?.trim() || 'Ubaté Centro';
           const clientPhone = document.getElementById('clientPhone')?.value?.trim() || '3044834698';
           const deliveryPin = Math.floor(1000 + Math.random() * 9000).toString();
 
-          try {
-            const newOrder = {
-              client_phone: clientPhone,
-              task_description: taskDesc,
-              delivery_address: deliveryAddress,
-              delivery_coords: window.currentCoords || { lat: 5.3081, lng: -73.8144 },
-              estimated_price: selectedPrice || 5000,
-              status: 'pending',
-              delivery_pin: deliveryPin,
-              created_at: new Date().toISOString()
-            };
+          const targetDb = (typeof db !== 'undefined' && db) ? db : (window.db || null);
+          console.log("🔥 1. INICIANDO CONEXIÓN A FIRESTORE...", { db: targetDb, taskDesc, deliveryAddress, clientPhone });
 
-            if (typeof generateOrderHash === 'function') {
+          const newOrder = {
+            client_phone: clientPhone,
+            task_description: taskDesc,
+            delivery_address: deliveryAddress,
+            delivery_coords: window.currentCoords || { lat: 5.3081, lng: -73.8144 },
+            estimated_price: selectedPrice || 5000,
+            status: 'pending',
+            delivery_pin: deliveryPin,
+            created_at: new Date().toISOString()
+          };
+
+          if (typeof generateOrderHash === 'function') {
+            try {
               newOrder.security_hash = await generateOrderHash(newOrder);
-            }
+            } catch (hErr) {}
+          }
 
-            console.log("🔥 Guardando pedido en Firestore:", newOrder);
-            const docRef = await addDoc(collection(db, "orders"), newOrder);
-            console.log("✅ Pedido guardado en Firestore con ID:", docRef.id);
+          try {
+            // Escritura en Firestore
+            const collRef = collection(targetDb || db, "orders");
+            const docRef = await addDoc(collRef, newOrder);
+            console.log("✅ 2. ORDEN CREADA EXITOSAMENTE CON ID:", docRef.id);
 
             localStorage.setItem('ubavoy_active_order_id', docRef.id);
             localStorage.setItem('ubavoy_active_order', docRef.id);
 
-            startActiveOrderTracking(docRef.id);
-            startHistoryListener(clientPhone);
+            if (typeof startActiveOrderTracking === 'function') startActiveOrderTracking(docRef.id);
+            if (typeof startHistoryListener === 'function') startHistoryListener(clientPhone);
 
-            alert(`🎉 ¡Mandado solicitado con éxito!\nCódigo de Entrega (PIN): ${deliveryPin}`);
+            alert(`🎉 ¡PEDIDO GUARDADO EN LA NUBE!\n\nID Firestore: ${docRef.id}\nPIN de Entrega: ${deliveryPin}`);
             orderForm.reset();
             if (document.getElementById('clientPhone')) {
               document.getElementById('clientPhone').value = clientPhone;
             }
 
-          } catch (err) {
-            console.error("❌ Error al guardar en Firestore:", err);
-            alert("Fallo al conectar con Firestore: " + err.message);
+          } catch (error) {
+            console.error("❌ 3. ERROR FIRESTORE:", error);
+            alert(`⛔ ERROR AL ESCRIBIR EN FIRESTORE:\n${error.message}\n\nCódigo: ${error.code || 'Desconocido'}`);
           }
         });
+      } else {
+        console.error("❌ No se encontró el elemento #orderForm en el DOM");
       }
     }
 
