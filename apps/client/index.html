@@ -183,7 +183,7 @@
           </span>
         </div>
 
-        <form id="orderForm" class="space-y-3.5">
+        <form id="orderForm" onsubmit="return false;" class="space-y-3.5">
           <!-- TELÉFONO CLIENTE / WHATSAPP -->
           <div>
             <label class="block text-xs font-semibold text-slate-300 mb-1">Tu Número WhatsApp (+57)</label>
@@ -236,7 +236,7 @@
           </div>
 
           <!-- BOTÓN SUBMIT CON ESTIMACIÓN -->
-          <button type="submit" id="submitOrderBtn"
+          <button type="button" id="submitOrderBtn"
             class="w-full bg-emerald-500 text-slate-950 font-bold py-3.5 rounded-xl shadow-lg hover:bg-emerald-400 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
             🚀 Pedir Domiciliario ($<span id="estimatedPriceDisplay">5.000</span> COP)
           </button>
@@ -458,61 +458,84 @@
     // Envío del Formulario
     function bindOrderFormHandler() {
       const orderForm = document.getElementById('orderForm') || document.querySelector('form');
-      if (orderForm) {
-        orderForm.addEventListener('submit', async (e) => {
+      const submitBtn = document.getElementById('submitOrderBtn');
+
+      const handleOrderSubmit = async (e) => {
+        if (e) {
           e.preventDefault();
+          if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        }
 
-          const taskDesc = document.getElementById('taskDesc')?.value?.trim() || 'Mandado Exprés de Prueba';
-          const deliveryAddress = document.getElementById('deliveryAddress')?.value?.trim() || 'Ubaté Centro';
-          const clientPhone = document.getElementById('clientPhone')?.value?.trim() || '3044834698';
-          const deliveryPin = Math.floor(1000 + Math.random() * 9000).toString();
+        console.log("🚀 Ejecutando envío JS a Firestore sin recarga de página...");
 
-          const targetDb = (typeof db !== 'undefined' && db) ? db : (window.db || null);
-          console.log("🔥 1. INICIANDO CONEXIÓN A FIRESTORE...", { db: targetDb, taskDesc, deliveryAddress, clientPhone });
+        const taskDesc = document.getElementById('taskDesc')?.value?.trim();
+        const deliveryAddress = document.getElementById('deliveryAddress')?.value?.trim();
+        const clientPhone = document.getElementById('clientPhone')?.value?.trim() || '3044834698';
 
-          const newOrder = {
-            client_phone: clientPhone,
-            task_description: taskDesc,
-            delivery_address: deliveryAddress,
-            delivery_coords: window.currentCoords || { lat: 5.3081, lng: -73.8144 },
-            estimated_price: selectedPrice || 5000,
-            status: 'pending',
-            delivery_pin: deliveryPin,
-            created_at: new Date().toISOString()
-          };
+        if (!taskDesc || !deliveryAddress) {
+          alert("Por favor completa la descripción del mandado y la dirección de entrega.");
+          return;
+        }
 
-          if (typeof generateOrderHash === 'function') {
-            try {
-              newOrder.security_hash = await generateOrderHash(newOrder);
-            } catch (hErr) {}
-          }
+        const deliveryPin = Math.floor(1000 + Math.random() * 9000).toString();
+        const targetDb = (typeof db !== 'undefined' && db) ? db : (window.db || null);
 
+        console.log("🔥 1. INICIANDO CONEXIÓN A FIRESTORE...", { db: targetDb, taskDesc, deliveryAddress, clientPhone });
+
+        const newOrder = {
+          client_phone: clientPhone,
+          task_description: taskDesc,
+          delivery_address: deliveryAddress,
+          delivery_coords: window.currentCoords || { lat: 5.3081, lng: -73.8144 },
+          estimated_price: selectedPrice || 5000,
+          status: 'pending',
+          delivery_pin: deliveryPin,
+          created_at: new Date().toISOString()
+        };
+
+        if (typeof generateOrderHash === 'function') {
           try {
-            // Escritura en Firestore
-            const collRef = collection(targetDb || db, "orders");
-            const docRef = await addDoc(collRef, newOrder);
-            console.log("✅ 2. ORDEN CREADA EXITOSAMENTE CON ID:", docRef.id);
+            newOrder.security_hash = await generateOrderHash(newOrder);
+          } catch (hErr) {}
+        }
 
-            localStorage.setItem('ubavoy_active_order_id', docRef.id);
-            localStorage.setItem('ubavoy_active_order', docRef.id);
+        try {
+          const collRef = collection(targetDb || db, "orders");
+          const docRef = await addDoc(collRef, newOrder);
+          console.log("✅ ORDEN CREADA EN FIRESTORE ID:", docRef.id);
 
-            if (typeof startActiveOrderTracking === 'function') startActiveOrderTracking(docRef.id);
-            if (typeof startHistoryListener === 'function') startHistoryListener(clientPhone);
+          localStorage.setItem('ubavoy_active_order_id', docRef.id);
+          localStorage.setItem('ubavoy_active_order', docRef.id);
 
-            alert(`🎉 ¡PEDIDO GUARDADO EN LA NUBE!\n\nID Firestore: ${docRef.id}\nPIN de Entrega: ${deliveryPin}`);
+          alert(`🎉 ¡MANDADO SOLICITADO CON ÉXITO!\n\nPIN de Entrega: ${deliveryPin}\nID Firestore: ${docRef.id}`);
+
+          startTrackingAndHistory(docRef.id, clientPhone);
+
+          if (orderForm && typeof orderForm.reset === 'function') {
             orderForm.reset();
-            if (document.getElementById('clientPhone')) {
-              document.getElementById('clientPhone').value = clientPhone;
-            }
-
-          } catch (error) {
-            console.error("❌ 3. ERROR FIRESTORE:", error);
-            alert(`⛔ ERROR AL ESCRIBIR EN FIRESTORE:\n${error.message}\n\nCódigo: ${error.code || 'Desconocido'}`);
           }
-        });
-      } else {
-        console.error("❌ No se encontró el elemento #orderForm en el DOM");
+          if (document.getElementById('clientPhone')) {
+            document.getElementById('clientPhone').value = clientPhone;
+          }
+
+        } catch (error) {
+          console.error("❌ Error guardando en Firestore:", error);
+          alert("Error de conexión a la base de datos: " + error.message);
+        }
+      };
+
+      if (submitBtn) {
+        submitBtn.addEventListener('click', handleOrderSubmit);
       }
+
+      if (orderForm) {
+        orderForm.addEventListener('submit', handleOrderSubmit);
+      }
+    }
+
+    function startTrackingAndHistory(orderId, phone) {
+      if (typeof startActiveOrderTracking === 'function') startActiveOrderTracking(orderId);
+      if (typeof startHistoryListener === 'function') startHistoryListener(phone);
     }
 
     // Función de Rastreo Activo en Vivo
