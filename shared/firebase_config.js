@@ -27,28 +27,95 @@ let db = null;
 let auth = null;
 let googleProvider = null;
 
-// Funciones helper SDK v10 (collection, addDoc) sobre Firebase Compat
+// Funciones helper SDK v10 (collection, addDoc, doc, query, where, orderBy, onSnapshot) sobre Firebase Compat
 function collection(dbInstance, collectionName) {
-  const targetDb = dbInstance || (typeof db !== 'undefined' ? db : null);
-  if (targetDb && typeof targetDb.collection === 'function') {
-    return targetDb.collection(collectionName);
+  let name = collectionName;
+  let targetDb = dbInstance;
+
+  if (typeof dbInstance === 'string' && !collectionName) {
+    name = dbInstance;
+    targetDb = (typeof window !== 'undefined' && window.db) ? window.db : db;
+  } else if (!targetDb || typeof targetDb.collection !== 'function') {
+    targetDb = (typeof window !== 'undefined' && window.db) ? window.db : db;
   }
-  return { collectionName, dbInstance: targetDb };
+
+  if (targetDb && typeof targetDb.collection === 'function') {
+    return targetDb.collection(name);
+  }
+  return { collectionName: name, dbInstance: targetDb };
 }
 
 async function addDoc(collRef, payload) {
   if (collRef && typeof collRef.add === 'function') {
     return await collRef.add(payload);
   }
-  if (typeof db !== 'undefined' && db && typeof collRef === 'string') {
-    return await db.collection(collRef).add(payload);
+  if (typeof collRef === 'string') {
+    const targetDb = (typeof window !== 'undefined' && window.db) ? window.db : db;
+    return await targetDb.collection(collRef).add(payload);
+  }
+  if (collRef && collRef.collectionName) {
+    const targetDb = collRef.dbInstance || (typeof window !== 'undefined' && window.db) ? window.db : db;
+    return await targetDb.collection(collRef.collectionName).add(payload);
   }
   throw new Error("Referencia de colección Firestore no válida");
+}
+
+function doc(dbInstance, collectionName, docId) {
+  let targetDb = dbInstance;
+  let coll = collectionName;
+  let id = docId;
+
+  if (typeof dbInstance === 'string' && typeof collectionName === 'string' && !docId) {
+    coll = dbInstance;
+    id = collectionName;
+    targetDb = (typeof window !== 'undefined' && window.db) ? window.db : db;
+  } else if (dbInstance && typeof dbInstance.doc === 'function') {
+    return dbInstance.doc(collectionName);
+  }
+
+  if (targetDb && typeof targetDb.collection === 'function') {
+    return targetDb.collection(coll).doc(id);
+  }
+  const fallbackDb = (typeof window !== 'undefined' && window.db) ? window.db : db;
+  return fallbackDb.collection(coll).doc(id);
+}
+
+function query(collRef, ...queryConstraints) {
+  let q = collRef;
+  for (const constraint of queryConstraints) {
+    if (typeof constraint === 'function') {
+      q = constraint(q);
+    }
+  }
+  return q;
+}
+
+function where(fieldPath, opStr, value) {
+  return (q) => q.where(fieldPath, opStr, value);
+}
+
+function orderBy(fieldPath, directionStr = 'asc') {
+  return (q) => q.orderBy(fieldPath, directionStr);
+}
+
+function onSnapshot(target, onNext, onError) {
+  if (target && typeof target.onSnapshot === 'function') {
+    return target.onSnapshot((snap) => {
+      onNext(snap);
+    }, onError);
+  }
+  console.warn("Target de onSnapshot no es válido:", target);
+  return () => {};
 }
 
 if (typeof window !== 'undefined') {
   window.collection = collection;
   window.addDoc = addDoc;
+  window.doc = doc;
+  window.query = query;
+  window.where = where;
+  window.orderBy = orderBy;
+  window.onSnapshot = onSnapshot;
 }
 
 try {

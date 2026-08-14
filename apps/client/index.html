@@ -273,11 +273,13 @@
         <div class="bg-slate-950 border border-amber-500/50 rounded-xl p-3 flex items-center justify-between">
           <div>
             <span class="text-[10px] text-slate-400 font-semibold block uppercase">Código PIN de Entrega</span>
-            <span class="text-[9px] text-amber-300">Entrégalo al domiciliario al recibir</span>
+            <span class="text-[9px] text-amber-300 block">Entrégalo al domiciliario al recibir</span>
+            <span id="activeTaskText" class="hidden"></span>
           </div>
           <span id="deliveryPinDisplay" class="font-mono font-black text-xl tracking-widest text-amber-400 bg-amber-950 px-3 py-1 rounded-lg border border-amber-700">
             ----
           </span>
+          <span id="activePinDisplay" class="hidden">----</span>
         </div>
 
         <!-- FICHA DEL DOMICILIARIO ASIGNADO EN TIEMPO REAL -->
@@ -303,6 +305,21 @@
             class="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-emerald-400 font-bold text-xs flex items-center justify-center gap-2 transition-all">
             <i class="fa-solid fa-map-location-dot"></i> 🗺️ Ver Ubicación y Ruta en Vivo
           </button>
+        </div>
+      </div>
+
+      <!-- SECTOR 4: SECCIÓN HISTORIAL DE MANDADOS EN FIRESTORE -->
+      <div id="history-section" class="glass-card rounded-2xl p-4 space-y-3 shadow-xl border-slate-800">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+          <h3 class="font-display font-bold text-sm text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-clock-rotate-left text-emerald-400"></i>
+            <span>📜 Historial de Mandados</span>
+          </h3>
+          <span class="text-[10px] text-slate-400">Realizados en Ubaté</span>
+        </div>
+
+        <div id="historyContainer" class="space-y-2">
+          <p class="text-slate-400 text-xs text-center p-4">Cargando historial...</p>
         </div>
       </div>
 
@@ -371,38 +388,27 @@
 
     let liveTrackingMapInstance = null;
     let activeOrderUnsubscribe = null;
+    let historyUnsubscribe = null;
 
     let currentClient = JSON.parse(localStorage.getItem('ubavoy_client_user') || JSON.stringify({
       uid: null,
       email: null,
       name: 'Cliente UbaVoy',
-      phone: '3101234567',
+      phone: '3044834698',
       photoURL: null
     }));
 
     let savedAddresses = JSON.parse(localStorage.getItem('ubavoy_saved_addresses') || JSON.stringify([
       { title: '🏠 Casa (Centro)', address: 'Carrera 7 # 8-45', lat: 5.3081, lng: -73.8144 },
-      { title: '💼 Trabajo / Droguería', address: 'Calle 9 # 6-20', lat: 5.3090, lng: -73.8130 }
+      { title: '💼 Trabajo / Plaza', address: 'Calle 9 # 6-20', lat: 5.3090, lng: -73.8130 }
     ]));
 
-    document.addEventListener('DOMContentLoaded', () => {
-      renderSavedAddresses();
-      updateHeaderUserUI();
-      registerServiceWorker();
-      initClientLeafletMap();
-      bindOrderFormSubmitHandler();
-
-      const lastOrderId = localStorage.getItem('ubavoy_active_order') || localStorage.getItem('ubavoy_active_order_id');
-      if (lastOrderId) {
-        trackClientOrder(lastOrderId);
-      }
-    });
-
-    function initClientLeafletMap() {
+    // Inicializar Mapa Leaflet
+    function initMap() {
       const mapContainer = document.getElementById('map');
-      if (!mapContainer) return;
+      if (!mapContainer || typeof L === 'undefined') return;
 
-      if (!clientMap && typeof L !== 'undefined') {
+      if (!clientMap) {
         clientMap = L.map('map').setView([UBATE_CENTER.lat, UBATE_CENTER.lng], 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
@@ -410,18 +416,24 @@
         }).addTo(clientMap);
 
         clientMarker = L.marker([UBATE_CENTER.lat, UBATE_CENTER.lng], { draggable: true }).addTo(clientMap);
+        window.currentCoords = { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
 
         clientMarker.on('dragend', function (e) {
-          const pos = clientMarker.getLatLng();
-          window.currentCoords = { lat: pos.lat, lng: pos.lng };
-          console.log("📍 Marcador movido:", window.currentCoords);
+          const coord = e.target.getLatLng();
+          window.currentCoords = { lat: coord.lat, lng: coord.lng };
+          console.log("📍 Ubicación arrastrada:", window.currentCoords);
         });
 
         clientMap.on('click', function (e) {
           clientMarker.setLatLng(e.latlng);
           window.currentCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
-          console.log("📍 Mapa clickeado:", window.currentCoords);
+          console.log("📍 Ubicación clickeada:", window.currentCoords);
         });
+      }
+
+      const locateBtn = document.getElementById('locateMeBtn');
+      if (locateBtn) {
+        locateBtn.onclick = getCurrentLocationClient;
       }
     }
 
@@ -429,15 +441,13 @@
       if ("geolocation" in navigator) {
         showToast("🎯 Obteniendo ubicación GPS...");
         navigator.geolocation.getCurrentPosition((pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          window.currentCoords = { lat, lng };
-
+          const { latitude, longitude } = pos.coords;
+          window.currentCoords = { lat: latitude, lng: longitude };
           if (clientMap && clientMarker) {
-            clientMap.setView([lat, lng], 16);
-            clientMarker.setLatLng([lat, lng]);
+            clientMap.setView([latitude, longitude], 17);
+            clientMarker.setLatLng([latitude, longitude]);
           }
-          showToast("📍 Ubicación GPS fijada correctamente");
+          showToast("📍 Ubicación GPS fijada correctamente en Ubaté");
         }, (err) => {
           console.warn("Geolocation error:", err);
           showToast("No se pudo obtener GPS. Usando Ubaté Centro", "warning");
@@ -447,13 +457,12 @@
       }
     }
 
-    function bindOrderFormSubmitHandler() {
+    // Envío del Formulario
+    function bindOrderFormHandler() {
       const orderForm = document.getElementById('orderForm') || document.querySelector('form');
-
       if (orderForm) {
         orderForm.addEventListener('submit', async (e) => {
           e.preventDefault();
-          console.log("🔥 Guardando pedido en Firestore...");
 
           const taskDesc = document.getElementById('taskDesc')?.value || 'Mandado Exprés';
           const deliveryAddress = document.getElementById('deliveryAddress')?.value || 'Ubaté Centro';
@@ -461,7 +470,7 @@
           const deliveryPin = Math.floor(1000 + Math.random() * 9000).toString();
 
           try {
-            const orderPayload = {
+            const newOrder = {
               client_phone: clientPhone,
               task_description: taskDesc,
               delivery_address: deliveryAddress,
@@ -473,51 +482,57 @@
             };
 
             if (typeof generateOrderHash === 'function') {
-              orderPayload.security_hash = await generateOrderHash(orderPayload);
+              newOrder.security_hash = await generateOrderHash(newOrder);
             }
 
-            const docRef = await addDoc(collection(db, "orders"), orderPayload);
-            console.log("✅ PEDIDO CREADO EXITOSAMENTE CON ID:", docRef.id);
+            const docRef = await addDoc(collection(db, "orders"), newOrder);
+            console.log("✅ Pedido publicado en Firestore ID:", docRef.id);
 
-            localStorage.setItem('ubavoy_active_order', docRef.id);
             localStorage.setItem('ubavoy_active_order_id', docRef.id);
-            
-            // Activar rastreo en vivo si la función existe
-            if (typeof window.trackClientOrder === 'function') {
-              window.trackClientOrder(docRef.id);
-            }
+            localStorage.setItem('ubavoy_active_order', docRef.id);
+
+            listenActiveOrder(docRef.id);
+            loadOrderHistory(clientPhone);
 
             alert(`🎉 ¡Mandado solicitado con éxito!\nCódigo de Entrega (PIN): ${deliveryPin}`);
             orderForm.reset();
             if (document.getElementById('clientPhone')) {
-              document.getElementById('clientPhone').value = '3044834698';
+              document.getElementById('clientPhone').value = clientPhone;
             }
-            
+
           } catch (err) {
-            console.error("❌ Error al guardar en Firestore:", err);
-            alert("Fallo al enviar pedido: " + err.message);
+            console.error("❌ Error en Firestore:", err);
+            alert("Error enviando pedido: " + err.message);
           }
         });
       }
     }
 
-    window.trackClientOrder = function(orderId) {
-      if (!orderId || typeof db === 'undefined' || db === null) return;
+    // Escuchar Orden Activa
+    function listenActiveOrder(orderId) {
+      if (!orderId || !db) return;
 
       if (activeOrderUnsubscribe) activeOrderUnsubscribe();
 
-      activeOrderUnsubscribe = db.collection('orders').doc(orderId).onSnapshot((docSnap) => {
+      const orderRef = doc(db, "orders", orderId);
+      activeOrderUnsubscribe = onSnapshot(orderRef, (docSnap) => {
         if (!docSnap.exists()) return;
         const order = docSnap.data();
 
         const card = document.getElementById('active-order-tracking-card');
         if (card) card.classList.remove('hidden');
 
-        const idDisp = document.getElementById('activeOrderIdDisplay');
-        if (idDisp) idDisp.innerText = `#${docSnap.id.substring(0, 6)}`;
+        const pinDisp1 = document.getElementById('activePinDisplay');
+        if (pinDisp1) pinDisp1.innerText = order.delivery_pin || '----';
 
-        const taskDisp = document.getElementById('activeOrderTask');
-        if (taskDisp) taskDisp.innerText = order.task_description || 'Mandado Exprés';
+        const pinDisp2 = document.getElementById('deliveryPinDisplay');
+        if (pinDisp2) pinDisp2.innerText = order.delivery_pin || '----';
+
+        const taskText1 = document.getElementById('activeTaskText');
+        if (taskText1) taskText1.innerText = order.task_description || 'Mandado Exprés';
+
+        const taskText2 = document.getElementById('activeOrderTask');
+        if (taskText2) taskText2.innerText = order.task_description || 'Mandado Exprés';
 
         const addrDisp = document.getElementById('activeOrderAddress');
         if (addrDisp) addrDisp.innerText = order.delivery_address || 'Ubaté';
@@ -525,44 +540,103 @@
         const priceDisp = document.getElementById('activeOrderPrice');
         if (priceDisp) priceDisp.innerText = `$${(order.estimated_price || 5000).toLocaleString()} COP`;
 
-        const pinDisp = document.getElementById('deliveryPinDisplay');
-        if (pinDisp) pinDisp.innerText = order.delivery_pin || '----';
+        const idDisp = document.getElementById('activeOrderIdDisplay');
+        if (idDisp) idDisp.innerText = `#${docSnap.id.substring(0, 6)}`;
 
         const hashDisp = document.getElementById('activeOrderHashDisplay');
         if (hashDisp) hashDisp.innerText = order.security_hash ? order.security_hash.substring(0, 16) + '...' : 'N/A';
 
-        const badge = document.getElementById('activeOrderBadgeStatus');
-        const driverCard = document.getElementById('assigned-driver-card');
-
-        const st = (order.status || 'pending').toLowerCase();
-        if (st === 'pending') {
-          if (badge) {
-            badge.className = "text-[9px] uppercase px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800 animate-pulse";
-            badge.innerText = "🔍 Buscando Domiciliario...";
-          }
-          if (driverCard) driverCard.classList.add('hidden');
-        } else if (st === 'assigned' || st === 'in_transit') {
-          if (badge) {
-            badge.className = "text-[9px] uppercase px-2 py-0.5 rounded-full bg-sky-950 text-sky-400 border border-sky-800";
-            badge.innerText = "🛵 Domiciliario en Camino";
-          }
-          if (driverCard) {
-            driverCard.classList.remove('hidden');
-            document.getElementById('driver-assigned-name').innerText = order.driver_name || 'Carlos Gómez';
-            document.getElementById('driver-assigned-vehicle').innerText = order.driver_vehicle || 'Moto FZ 150';
-            document.getElementById('driver-whatsapp-link').href = `https://wa.me/57${(order.driver_phone || '3100000000').replace(/[^0-9]/g, '')}`;
-          }
-        } else if (st === 'completed') {
-          if (badge) {
-            badge.className = "text-[9px] uppercase px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800";
-            badge.innerText = "✅ Mandado Entregado";
-          }
-          if (driverCard) driverCard.classList.add('hidden');
-          localStorage.removeItem('ubavoy_active_order');
-          localStorage.removeItem('ubavoy_active_order_id');
-        }
+        updateStatusBadge(order.status, order);
       });
-    };
+    }
+
+    function updateStatusBadge(status, order = {}) {
+      const badge = document.getElementById('activeOrderBadgeStatus');
+      const driverCard = document.getElementById('assigned-driver-card');
+      const st = (status || 'pending').toLowerCase();
+
+      if (st === 'pending') {
+        if (badge) {
+          badge.className = "text-[9px] uppercase px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800 animate-pulse";
+          badge.innerText = "🔍 Buscando Domiciliario...";
+        }
+        if (driverCard) driverCard.classList.add('hidden');
+      } else if (st === 'assigned' || st === 'in_transit') {
+        if (badge) {
+          badge.className = "text-[9px] uppercase px-2 py-0.5 rounded-full bg-sky-950 text-sky-400 border border-sky-800";
+          badge.innerText = "🛵 Domiciliario en Camino";
+        }
+        if (driverCard) {
+          driverCard.classList.remove('hidden');
+          document.getElementById('driver-assigned-name').innerText = order.driver_name || 'Carlos Gómez';
+          document.getElementById('driver-assigned-vehicle').innerText = order.driver_vehicle || 'Moto FZ 150';
+          document.getElementById('driver-whatsapp-link').href = `https://wa.me/57${(order.driver_phone || '3100000000').replace(/[^0-9]/g, '')}`;
+        }
+      } else if (st === 'completed') {
+        if (badge) {
+          badge.className = "text-[9px] uppercase px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800";
+          badge.innerText = "✅ Mandado Entregado";
+        }
+        if (driverCard) driverCard.classList.add('hidden');
+        localStorage.removeItem('ubavoy_active_order_id');
+        localStorage.removeItem('ubavoy_active_order');
+        showToast('🎉 ¡Tu mandado ha sido entregado exitosamente!');
+      }
+    }
+
+    // Cargar Historial
+    function loadOrderHistory(phone) {
+      if (!phone || !db) return;
+
+      if (historyUnsubscribe) historyUnsubscribe();
+
+      const q = query(collection(db, "orders"), where("client_phone", "==", phone));
+      historyUnsubscribe = onSnapshot(q, (snapshot) => {
+        const historyContainer = document.getElementById('historyContainer');
+        if (!historyContainer) return;
+
+        const orders = [];
+        snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
+
+        orders.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+
+        if (orders.length === 0) {
+          historyContainer.innerHTML = `<p class="text-slate-400 text-xs text-center p-4 bg-slate-900/60 rounded-xl border border-slate-800">No tienes pedidos registrados en Firestore para el número +57 ${escapeHtml(phone)}.</p>`;
+          return;
+        }
+
+        historyContainer.innerHTML = orders.map(o => `
+          <div class="bg-slate-900/90 p-3.5 rounded-xl mb-2 border border-slate-700/60 flex justify-between items-center shadow-md">
+            <div class="space-y-1">
+              <div class="text-xs font-bold text-emerald-400">#${o.id.substring(0, 6)} - ${escapeHtml(o.task_description || 'Mandado')}</div>
+              <div class="text-[11px] text-slate-300"><i class="fa-solid fa-location-dot text-amber-400 text-[10px]"></i> ${escapeHtml(o.delivery_address || 'Ubaté')}</div>
+              <div class="text-[10px] text-slate-400 font-mono">PIN: <span class="text-amber-400 font-bold">${o.delivery_pin || '----'}</span> | Estado: <span class="uppercase font-semibold text-slate-200">${o.status || 'PENDING'}</span></div>
+            </div>
+            <div class="text-right space-y-1.5">
+              <div class="text-xs font-bold text-amber-400">$${(o.estimated_price || 5000).toLocaleString()} COP</div>
+              <button type="button" onclick="repeatOrder('${escapeHtml(o.task_description || '')}', '${escapeHtml(o.delivery_address || '')}')"
+                class="px-2.5 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-300 font-bold text-[10px] flex items-center gap-1 transition-all active:scale-95">
+                <i class="fa-solid fa-rotate-right"></i> Repetir Mandado
+              </button>
+            </div>
+          </div>
+        `).join('');
+      });
+    }
+
+    function repeatOrder(taskDesc, deliveryAddr) {
+      const taskInput = document.getElementById('taskDesc');
+      const addrInput = document.getElementById('deliveryAddress');
+      const orderForm = document.getElementById('orderForm');
+
+      if (taskInput) taskInput.value = taskDesc;
+      if (addrInput) addrInput.value = deliveryAddr;
+
+      if (orderForm) {
+        orderForm.scrollIntoView({ behavior: 'smooth' });
+      }
+      showToast('🔄 Mandado cargado en el formulario. Haz clic en Pedir Domiciliario.');
+    }
 
     async function handleGoogleSignInClient() {
       try {
@@ -721,6 +795,28 @@
       div.innerText = text || '';
       return div.innerHTML;
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderSavedAddresses();
+      updateHeaderUserUI();
+      registerServiceWorker();
+      initMap();
+      bindOrderFormHandler();
+
+      const activeId = localStorage.getItem('ubavoy_active_order_id') || localStorage.getItem('ubavoy_active_order');
+      if (activeId) listenActiveOrder(activeId);
+
+      const phoneInput = document.getElementById('clientPhone');
+      if (phoneInput) {
+        if (phoneInput.value) loadOrderHistory(phoneInput.value.trim());
+        phoneInput.addEventListener('input', (e) => {
+          const val = e.target.value.trim();
+          if (val.length >= 7) {
+            loadOrderHistory(val);
+          }
+        });
+      }
+    });
   </script>
 </body>
 </html>
