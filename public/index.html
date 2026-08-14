@@ -498,7 +498,7 @@
           localStorage.setItem('ubavoy_active_order_id', docRef.id);
           localStorage.setItem('ubavoy_active_order', docRef.id);
 
-          alert(`🎉 ¡MANDADO SOLICITADO CON ÉXITO!\n\nPIN de Entrega: ${deliveryPin}\nID Firestore: ${docRef.id}`);
+          alert(`✅ PEDIDO PUBLICADO CON ÉXITO. ID: ${docRef.id}\nPIN de Entrega: ${deliveryPin}`);
 
           if (typeof window.trackClientOrder === 'function') {
             window.trackClientOrder(docRef.id);
