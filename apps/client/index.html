@@ -610,19 +610,29 @@
       }
     }
 
-    // Función de Historial por Teléfono
-    function startHistoryListener(phone) {
-      if (!phone || !db) return;
+    // Función de Historial por Teléfono o Email
+    function startHistoryListener(queryValue) {
+      const targetDb = (typeof db !== 'undefined' && db) ? db : (window.db || null);
+      if (!queryValue || !targetDb) return;
 
       if (historyUnsubscribe) historyUnsubscribe();
 
-      const q = query(collection(db, "orders"), where("client_phone", "==", phone));
+      let q;
+      if (typeof queryValue === 'string' && queryValue.includes('@')) {
+        q = query(collection(targetDb, "orders"), where("client_email", "==", queryValue));
+      } else {
+        q = query(collection(targetDb, "orders"), where("client_phone", "==", queryValue));
+      }
+
       historyUnsubscribe = onSnapshot(q, (snapshot) => {
         const historyContainer = document.getElementById('historyContainer');
         if (!historyContainer) return;
 
         const orders = [];
-        snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
+        snapshot.forEach(docSnap => {
+          const data = typeof docSnap.data === 'function' ? docSnap.data() : docSnap;
+          orders.push({ id: docSnap.id, ...data });
+        });
 
         orders.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
 
@@ -898,9 +908,10 @@
 
             localStorage.setItem('ubavoy_client_user', JSON.stringify(currentClient));
 
-            if (typeof db !== 'undefined' && db) {
+            const targetDb = (typeof db !== 'undefined' && db) ? db : (window.db || null);
+            if (targetDb) {
               try {
-                await db.collection('users').doc(user.uid).set({
+                await targetDb.collection('users').doc(user.uid).set({
                   name: user.displayName || 'Cliente UbaVoy',
                   email: user.email,
                   role: 'client',
@@ -911,6 +922,9 @@
               }
             }
             updateHeaderUserUI();
+
+            const queryVal = user.phone || user.email || currentClient.phone || '3044834698';
+            startHistoryListener(queryVal);
           }
         });
       }
