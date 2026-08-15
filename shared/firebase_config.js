@@ -6,13 +6,19 @@
  * criptográfica SHA-256 (generateOrderHash).
  */
 
+// Configuración pública del proyecto Firebase 'ubavoy'.
+// Nota: la apiKey web de Firebase NO es un secreto (Google la documenta como
+// identificador público y viaja en el código de cualquier app web). Lo que
+// realmente protege los datos son las reglas de Firestore (firestore.rules)
+// y la lista de dominios autorizados en Authentication.
 const firebaseConfig = {
-  apiKey: "AIzaSyYOUR_API_KEY_HERE",
+  apiKey: "AIzaSyDpmcwBn9s-wGxs1eT_oE74da0oM7edoyc",
   authDomain: "ubavoy.firebaseapp.com",
   projectId: "ubavoy",
-  storageBucket: "ubavoy.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:abcdef123456"
+  storageBucket: "ubavoy.firebasestorage.app",
+  messagingSenderId: "929185575194",
+  appId: "1:929185575194:web:d3e07b24d4944035f7fca3",
+  measurementId: "G-JN664QGZCB"
 };
 
 // Coordenadas centrales por defecto para Ubaté, Cundinamarca

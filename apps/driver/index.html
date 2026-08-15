@@ -261,6 +261,46 @@
         </div>
       </div>
 
+      <!-- HISTORIAL DE CARRERAS COMPLETADAS -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+            <i class="fa-solid fa-clock-rotate-left text-sky-400"></i> Mi Historial de Carreras
+          </h3>
+          <span id="history-count-badge" class="text-xs font-bold text-sky-400 bg-sky-950 px-2.5 py-0.5 rounded-full border border-sky-800">
+            0 hechas
+          </span>
+        </div>
+
+        <!-- Resumen de ganancias -->
+        <div id="history-summary" class="hidden glass-card rounded-2xl p-4 border-sky-500/30">
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div>
+              <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Hoy</p>
+              <p id="history-today-count" class="font-display font-extrabold text-lg text-sky-400 leading-none">0</p>
+              <p class="text-[10px] text-slate-500 mt-0.5">carreras</p>
+            </div>
+            <div class="border-x border-slate-800">
+              <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Recaudado hoy</p>
+              <p id="history-today-earnings" class="font-display font-extrabold text-lg text-emerald-400 leading-none">$0</p>
+              <p class="text-[10px] text-slate-500 mt-0.5">en efectivo</p>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Total</p>
+              <p id="history-total-count" class="font-display font-extrabold text-lg text-white leading-none">0</p>
+              <p class="text-[10px] text-slate-500 mt-0.5">entregas</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="history-feed" class="space-y-2">
+          <div class="glass-card rounded-2xl p-6 text-center text-xs text-slate-400">
+            <i class="fa-solid fa-box-open text-2xl text-slate-600 mb-2 block"></i>
+            Aún no has completado carreras. Las que entregues aparecerán aquí.
+          </div>
+        </div>
+      </div>
+
     </main>
 
     <!-- MODAL ERROR DE AUTORIZACIÓN EMAIL RESTRENGIDO -->
@@ -921,20 +961,36 @@
       unsubscribeOrders = onSnapshot(ordersRef, (snapshot) => {
         const pendingOrders = [];
         const assignedOrders = [];
+        const completedOrders = [];
         const driverId = currentDriver.uid || currentDriver.phone;
+
+        // Una carrera es "mía" si coincide el uid de la cuenta o el teléfono.
+        // Se comparan ambos porque las carreras viejas se guardaron con el
+        // teléfono antes de que existiera el login con cuenta.
+        const esMia = (data) =>
+          (driverId && data.assigned_driver_id === driverId) ||
+          (currentDriver.uid && data.assigned_driver_id === currentDriver.uid) ||
+          (currentDriver.phone && data.driver_phone === currentDriver.phone);
 
         snapshot.forEach(docSnap => {
           const data = typeof docSnap.data === 'function' ? docSnap.data() : docSnap;
           data.id = docSnap.id;
 
           const st = data.status ? data.status.toString().toLowerCase() : '';
-          
+
           if (st === 'pending') {
             pendingOrders.push(data);
-          } else if ((st === 'assigned' || st === 'in_transit') && (data.assigned_driver_id === driverId || data.driver_phone === currentDriver.phone)) {
+          } else if ((st === 'assigned' || st === 'in_transit') && esMia(data)) {
             assignedOrders.push(data);
+          } else if ((st === 'completed' || st === 'delivered') && esMia(data)) {
+            completedOrders.push(data);
           }
         });
+
+        // Más recientes primero.
+        completedOrders.sort((a, b) =>
+          String(b.completed_at || b.created_at || '').localeCompare(String(a.completed_at || a.created_at || ''))
+        );
 
         const countBadge = document.getElementById('available-count-badge');
         if (countBadge) countBadge.innerText = `${pendingOrders.length} Libres`;
@@ -949,6 +1005,7 @@
 
         renderOrdersFeed(pendingOrders);
         renderAssignedOrdersFeed(assignedOrders);
+        renderHistoryFeed(completedOrders);
       }, (error) => {
         console.error("❌ Error de Firestore en Driver:", error);
       });
@@ -1053,6 +1110,82 @@
             </div>
           </div>
         `;
+      }).join('');
+    }
+
+    /** Formatea 5000 -> "$5.000" con separador de miles colombiano. */
+    function formatoCOP(valor) {
+      const n = Number(valor) || 0;
+      return '$' + n.toLocaleString('es-CO');
+    }
+
+    /** Convierte un ISO a "15 ago, 3:24 p. m." */
+    function fechaLegible(iso) {
+      if (!iso) return 'Fecha no registrada';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return 'Fecha no registrada';
+      return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) +
+             ', ' + d.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
+    }
+
+    function renderHistoryFeed(orders) {
+      const feed = document.getElementById('history-feed');
+      const badge = document.getElementById('history-count-badge');
+      const resumen = document.getElementById('history-summary');
+      if (!feed) return;
+
+      if (badge) badge.innerText = `${orders.length} ${orders.length === 1 ? 'hecha' : 'hechas'}`;
+
+      if (!orders.length) {
+        if (resumen) resumen.classList.add('hidden');
+        feed.innerHTML = `
+          <div class="glass-card rounded-2xl p-6 text-center text-xs text-slate-400">
+            <i class="fa-solid fa-box-open text-2xl text-slate-600 mb-2 block"></i>
+            Aún no has completado carreras. Las que entregues aparecerán aquí.
+          </div>`;
+        return;
+      }
+
+      // Resumen del día
+      const hoy = new Date().toDateString();
+      const deHoy = orders.filter(o => {
+        const f = new Date(o.completed_at || o.created_at || '');
+        return !isNaN(f.getTime()) && f.toDateString() === hoy;
+      });
+      const recaudadoHoy = deHoy.reduce((s, o) => s + (Number(o.estimated_price) || 0), 0);
+
+      const elHoy = document.getElementById('history-today-count');
+      const elGan = document.getElementById('history-today-earnings');
+      const elTot = document.getElementById('history-total-count');
+      if (elHoy) elHoy.innerText = deHoy.length;
+      if (elGan) elGan.innerText = formatoCOP(recaudadoHoy);
+      if (elTot) elTot.innerText = orders.length;
+      if (resumen) resumen.classList.remove('hidden');
+
+      feed.innerHTML = orders.map(o => {
+        const desc = o.task_description || o.description || 'Mandado UbaVoy';
+        const addr = o.delivery_address || o.destination || 'Ubaté';
+        const precio = formatoCOP(o.estimated_price || 0);
+        const cuando = fechaLegible(o.completed_at || o.created_at);
+
+        return `
+          <div class="glass-card rounded-xl p-3 border-slate-800 flex items-start gap-3">
+            <div class="w-8 h-8 rounded-lg bg-sky-950 border border-sky-800 flex items-center justify-center shrink-0 mt-0.5">
+              <i class="fa-solid fa-check text-sky-400 text-xs"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-start justify-between gap-2">
+                <h4 class="font-bold text-xs text-slate-100 leading-snug truncate">${escapeHtml(desc)}</h4>
+                <span class="text-xs font-extrabold text-emerald-400 shrink-0">${precio}</span>
+              </div>
+              <p class="text-[11px] text-slate-400 truncate mt-0.5">
+                <i class="fa-solid fa-location-dot text-slate-600 mr-1"></i>${escapeHtml(addr)}
+              </p>
+              <p class="text-[10px] text-slate-500 mt-1">
+                <i class="fa-regular fa-clock mr-1"></i>${escapeHtml(cuando)}
+              </p>
+            </div>
+          </div>`;
       }).join('');
     }
 
