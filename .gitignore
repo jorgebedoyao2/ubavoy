@@ -49,3 +49,12 @@ env/
 
 # Logs
 *.log
+
+# Node (solo se usa para las pruebas de reglas de Firestore)
+node_modules/
+package-lock.json
+
+# Firebase
+.firebase/
+firestore-debug.log
+firebase-debug.log

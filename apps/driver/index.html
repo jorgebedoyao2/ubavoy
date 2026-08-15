@@ -51,9 +51,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   
   <!-- Shared Firebase Config & PWA Installer Engine -->
-  <script src="../../shared/firebase_config.js"></script>
   <script src="/shared/firebase_config.js"></script>
-  <script src="../../shared/pwa_installer.js"></script>
   <script src="/shared/pwa_installer.js"></script>
 
   <style>
@@ -105,6 +103,27 @@
   </style>
 </head>
 <body class="h-full bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950">
+
+  <!-- ============================================================
+       PUERTA DE ACTIVACIÓN DE SONIDO
+       Los navegadores móviles bloquean el audio hasta que la persona
+       toca la pantalla. Sin este paso, un pedido que ya estaba
+       pendiente al abrir la app vibra y parpadea, pero NO SUENA.
+       ============================================================ -->
+  <div id="audioGate" class="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-sm flex-col items-center justify-center px-8 text-center hidden">
+    <div class="w-20 h-20 rounded-full bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center mb-5 animate-pulse">
+      <i class="fa-solid fa-bell text-amber-400 text-3xl"></i>
+    </div>
+    <h2 class="font-display font-extrabold text-2xl text-white mb-2">Activa tus alertas</h2>
+    <p class="text-sm text-slate-400 mb-7 max-w-xs">
+      Toca el botón para que UbaVoy pueda sonar y vibrar cuando entre un mandado nuevo, aunque tengas el celular en el bolsillo.
+    </p>
+    <button id="audioGateBtn" type="button"
+            class="w-full max-w-xs py-4 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-base shadow-lg shadow-amber-600/40 transition-all active:scale-95">
+      <i class="fa-solid fa-volume-high mr-2"></i> Activar sonido y vibración
+    </button>
+    <p id="audioGateHint" class="text-[11px] text-slate-500 mt-4">Solo tienes que hacerlo una vez por sesión.</p>
+  </div>
 
   <!-- CONTENEDOR PRINCIPAL PWA MÓVIL DOMICILIARIO -->
   <div class="max-w-md mx-auto w-full min-h-screen flex flex-col bg-slate-950 shadow-2xl relative border-x border-slate-800/60 pb-20">
@@ -435,18 +454,28 @@
       role: 'driver'
     }));
 
+    let audioUnlocked = false;
+
     document.addEventListener('DOMContentLoaded', () => {
       updateHeaderUserUI();
       registerServiceWorker();
 
-      // DESBLOQUEO AUTOMÁTICO DE AUDIOCONTEXT AL TOCAR CUALQUIER PARTE DE LA PANTALLA
-      const unlockAudio = () => {
-        initAudioEngine();
-        document.removeEventListener('click', unlockAudio);
-        document.removeEventListener('touchstart', unlockAudio);
-      };
+      // Cualquier toque en la pantalla también sirve para desbloquear el audio.
+      const unlockAudio = () => { initAudioEngine(); };
       document.addEventListener('click', unlockAudio);
       document.addEventListener('touchstart', unlockAudio);
+
+      // Botón explícito de la puerta de activación.
+      const gateBtn = document.getElementById('audioGateBtn');
+      if (gateBtn) {
+        gateBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await activarAlertas();
+        });
+      }
+
+      refrescarPuertaDeAudio();
 
       // INICIAR DISPONIBILIDAD Y CONEXIÓN
       isAvailable = true;
@@ -454,12 +483,72 @@
       startDriverFirestoreRealtime();
     });
 
+    /**
+     * Desbloquea el audio y pide permiso de notificaciones. Debe llamarse
+     * SIEMPRE desde un gesto real del usuario (click/touch), porque los
+     * navegadores ignoran resume() fuera de un gesto.
+     */
+    async function activarAlertas() {
+      initAudioEngine();
+
+      if (audioCtx && audioCtx.state === 'suspended') {
+        try { await audioCtx.resume(); } catch (e) {}
+      }
+
+      // Pitido corto de confirmación: si se oye, la alarma va a sonar.
+      if (audioCtx && audioCtx.state === 'running') {
+        audioUnlocked = true;
+        try {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.12);
+        } catch (e) {}
+      }
+
+      if ("Notification" in window && Notification.permission === "default") {
+        try { await Notification.requestPermission(); } catch (e) {}
+      }
+
+      if ("vibrate" in navigator) navigator.vibrate(120);
+
+      refrescarPuertaDeAudio();
+    }
+
+    /** Muestra la puerta solo mientras el audio siga bloqueado. */
+    function refrescarPuertaDeAudio() {
+      const gate = document.getElementById('audioGate');
+      if (!gate) return;
+      if (audioUnlocked) {
+        gate.classList.add('hidden');
+        gate.classList.remove('flex');
+      } else {
+        gate.classList.remove('hidden');
+        gate.classList.add('flex');
+      }
+    }
+
     function initAudioEngine() {
       if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) { return; }
       }
       if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
+        audioCtx.resume().then(() => {
+          if (audioCtx.state === 'running' && !audioUnlocked) {
+            audioUnlocked = true;
+            refrescarPuertaDeAudio();
+          }
+        }).catch(() => {});
+      } else if (audioCtx.state === 'running' && !audioUnlocked) {
+        audioUnlocked = true;
+        refrescarPuertaDeAudio();
       }
     }
 
@@ -560,6 +649,63 @@
     function testAlarmPulseOnce() {
       startSustainedAlarm(null);
       setTimeout(() => stopSustainedAlarm(), 5000);
+    }
+
+    /**
+     * Diagnóstico: cuenta cuántos pedidos hay en Firestore y en qué estado,
+     * para saber si el problema es la conexión o el filtro de estados.
+     */
+    async function forceReloadOrdersDiagnostic() {
+      const targetDb = (typeof db !== 'undefined' && db) ? db : (window.db || null);
+      if (!targetDb) {
+        showToast('Sin conexión a Firestore', 'error');
+        return;
+      }
+      try {
+        const snap = await targetDb.collection('orders').get();
+        const porEstado = {};
+        snap.forEach(d => {
+          const st = (d.data().status || 'sin_estado').toString().toLowerCase();
+          porEstado[st] = (porEstado[st] || 0) + 1;
+        });
+        const resumen = Object.entries(porEstado).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'ninguno';
+        console.log('📊 Diagnóstico de pedidos:', porEstado);
+        showToast(`${snap.size} pedidos → ${resumen}`, 'warning');
+      } catch (e) {
+        console.error('Error en diagnóstico:', e);
+        showToast('No se pudo leer Firestore: ' + (e.code || e.message), 'error');
+      }
+    }
+
+    /**
+     * Crea un pedido de prueba real en Firestore para validar que la alarma
+     * y el canal en tiempo real funcionan, sin depender de la app cliente.
+     */
+    async function createTestOrderInFirestore() {
+      const targetDb = (typeof db !== 'undefined' && db) ? db : (window.db || null);
+      if (!targetDb) {
+        showToast('Sin conexión a Firestore', 'error');
+        return;
+      }
+      const pin = String(Math.floor(1000 + Math.random() * 9000));
+      const pedido = {
+        client_uid: 'PRUEBA_' + (currentDriver.uid || 'local'),
+        client_phone: '3000000000',
+        task_description: '🧪 PEDIDO DE PRUEBA - ignorar',
+        delivery_address: 'Plaza Principal, Ubaté',
+        delivery_coords: { lat: 5.3081, lng: -73.8144 },
+        estimated_price: 5000,
+        status: 'pending',
+        delivery_pin: pin,
+        created_at: new Date().toISOString()
+      };
+      try {
+        await targetDb.collection('orders').add(pedido);
+        showToast(`Pedido de prueba creado (PIN ${pin})`, 'success');
+      } catch (e) {
+        console.error('Error creando pedido de prueba:', e);
+        showToast('No se pudo crear: ' + (e.code || e.message), 'error');
+      }
     }
 
     function toggleAvailability() {
@@ -862,6 +1008,10 @@
         const addr = order.delivery_address || order.destination || 'Ubaté';
         const price = order.estimated_price || order.estimatedPrice || 0;
         const clientPhone = order.client_phone || '3101234567';
+        // Las coordenadas van dentro de un atributo onclick: se fuerzan a
+        // número para que un valor manipulado no pueda inyectar JavaScript.
+        const lat = Number(coords.lat) || UBATE_CENTER.lat;
+        const lng = Number(coords.lng) || UBATE_CENTER.lng;
 
         return `
           <div class="glass-card rounded-2xl p-4 space-y-3 border border-slate-800 hover:border-amber-500/40 transition-all shadow-lg">
@@ -885,7 +1035,7 @@
 
             <div class="pt-2 flex flex-col gap-2 border-t border-slate-800/60">
               <div class="flex items-center justify-between gap-2">
-                <button onclick="openGpsNavigationModal(${coords.lat}, ${coords.lng})"
+                <button onclick="openGpsNavigationModal(${lat}, ${lng})"
                   class="text-[11px] font-bold text-sky-400 bg-sky-950/80 hover:bg-sky-900 border border-sky-800 px-2.5 py-1.5 rounded-xl flex items-center gap-1">
                   <i class="fa-solid fa-map-location-dot"></i> GPS Navegación
                 </button>
@@ -922,6 +1072,10 @@
         const addr = order.delivery_address || order.destination || 'Ubaté';
         const price = order.estimated_price || order.estimatedPrice || 0;
         const clientPhone = order.client_phone || '3101234567';
+        // Las coordenadas van dentro de un atributo onclick: se fuerzan a
+        // número para que un valor manipulado no pueda inyectar JavaScript.
+        const lat = Number(coords.lat) || UBATE_CENTER.lat;
+        const lng = Number(coords.lng) || UBATE_CENTER.lng;
 
         return `
           <div class="glass-card rounded-2xl p-4 space-y-3 border border-emerald-500/50 shadow-xl bg-slate-900/90">
@@ -934,12 +1088,12 @@
             </div>
 
             <div class="text-xs text-slate-300 space-y-1">
-              <p><strong class="text-slate-400">Cliente WhatsApp:</strong> ${clientPhone}</p>
+              <p><strong class="text-slate-400">Cliente WhatsApp:</strong> ${escapeHtml(clientPhone)}</p>
               <p><strong class="text-slate-400">Entrega:</strong> ${escapeHtml(addr)}</p>
             </div>
 
             <div class="pt-2 flex items-center justify-between border-t border-slate-800">
-              <button onclick="openGpsNavigationModal(${coords.lat}, ${coords.lng})"
+              <button onclick="openGpsNavigationModal(${lat}, ${lng})"
                 class="text-[11px] font-bold text-sky-400 bg-sky-950 hover:bg-sky-900 border border-sky-800 px-3 py-1.5 rounded-xl flex items-center gap-1">
                 <i class="fa-solid fa-map-location-dot"></i> GPS Navegación
               </button>

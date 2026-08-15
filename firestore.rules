@@ -1,0 +1,227 @@
+rules_version = '2';
+
+// ============================================================================
+// UbaVoy - Reglas de Seguridad de Firestore
+// ============================================================================
+// Modelo de identidad: TODA persona (cliente, domiciliario, admin) entra con
+// Firebase Auth. El documento users/{uid} usa el uid de Auth como ID.
+//
+// Campos sensibles y quién los puede tocar:
+//   role         -> solo admin (define si es client / driver / admin)
+//   is_approved  -> solo admin (habilita al domiciliario para ver carreras)
+//   balance      -> solo admin (recargas). El domiciliario SOLO puede
+//                   descontarse exactamente el costo de una carrera.
+//
+// Nota sobre el plan Spark (gratis): no hay Cloud Functions, así que toda la
+// validación de dinero vive aquí. Estas reglas corren en los servidores de
+// Google y NO se pueden saltar desde el navegador, a diferencia del PIN del
+// panel de admin.
+//
+// IMPORTANTE - primer administrador: las reglas impiden que alguien se
+// autoproclame admin. El primer admin se marca a mano una sola vez desde la
+// consola de Firebase: en users/{tu-uid} poner el campo role = "admin".
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Constantes del negocio ----------
+    function costoCarrera()    { return 500; }
+    function preciosValidos()  { return [5000, 7000]; }  // urbano / perímetro
+
+    // ---------- Helpers de identidad ----------
+    function estaLogueado() {
+      return request.auth != null;
+    }
+
+    function datosDe(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function existeMiPerfil() {
+      return estaLogueado() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function miRol() {
+      return datosDe(request.auth.uid).role;
+    }
+
+    function esAdmin() {
+      return existeMiPerfil() && miRol() == 'admin';
+    }
+
+    function esDomiciliarioAprobado() {
+      return existeMiPerfil() &&
+             miRol() == 'driver' &&
+             datosDe(request.auth.uid).is_approved == true;
+    }
+
+    // Devuelve true si la escritura SOLO toca los campos permitidos.
+    function soloCambia(campos) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos);
+    }
+
+    // Nota: affectedKeys() devuelve un Set, y el operador "in" no aplica a Sets
+    // en las reglas de Firestore (produce error de evaluación). Se usa hasAny().
+    function noCambia(campo) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([campo]);
+    }
+
+    // =========================================================================
+    // users/{uid}  - perfiles de clientes, domiciliarios y administradores
+    // =========================================================================
+    match /users/{uid} {
+
+      // Cada quien ve su propio perfil. El admin ve todos.
+      allow get: if estaLogueado() && (request.auth.uid == uid || esAdmin());
+
+      // Listar usuarios es exclusivo del panel de admin.
+      allow list: if esAdmin();
+
+      // Al registrarse, la persona crea SU propio documento y arranca
+      // sin saldo, sin aprobar y sin poder elegir ser admin.
+      allow create: if estaLogueado()
+                    && request.auth.uid == uid
+                    && request.resource.data.role in ['client', 'driver']
+                    && request.resource.data.get('balance', 0) == 0
+                    && request.resource.data.get('is_approved', false) == false;
+
+      // Edición normal por el propio dueño: puede cambiar sus datos de
+      // contacto, pero NUNCA su rol, su aprobación ni su saldo.
+      function editaSuPerfil(uidObjetivo) {
+        return estaLogueado()
+               && resource != null
+               && request.auth.uid == uidObjetivo
+               && noCambia('role')
+               && noCambia('is_approved')
+               && noCambia('balance');
+      }
+
+      // Excepción controlada: el domiciliario puede descontarse el costo de
+      // una carrera, y SOLO eso. No puede subirse el saldo ni ponerlo en
+      // cualquier número: la resta tiene que ser exacta y tiene que alcanzarle.
+      // Esto es lo que hoy permite "saldo infinito" borrando el navegador.
+      function esCobroDeCarrera(uidObjetivo) {
+        return estaLogueado()
+               && resource != null
+               && request.auth.uid == uidObjetivo
+               && soloCambia(['balance'])
+               && resource.data.get('balance', 0) >= costoCarrera()
+               && request.resource.data.balance == resource.data.get('balance', 0) - costoCarrera();
+      }
+
+      allow update: if editaSuPerfil(uid)
+                    || esCobroDeCarrera(uid)
+                    || esAdmin();
+
+      // Nadie borra usuarios desde las apps.
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // orders/{orderId}  - pedidos / mandados
+    // =========================================================================
+    match /orders/{orderId} {
+
+      function esMiPedido() {
+        return estaLogueado()
+               && resource != null
+               && resource.data.get('client_uid', '') == request.auth.uid;
+      }
+
+      function soyElAsignado() {
+        return estaLogueado()
+               && resource != null
+               && resource.data.get('assigned_driver_id', '') == request.auth.uid;
+      }
+
+      // El cliente ve los suyos; el domiciliario aprobado ve la bolsa de
+      // trabajo; el admin lo ve todo. Un visitante anónimo NO ve nada:
+      // esto es lo que hoy deja expuestos los teléfonos de tus clientes.
+      allow read: if esMiPedido() || esDomiciliarioAprobado() || esAdmin();
+
+      // Crear pedido: solo un usuario logueado, a su propio nombre, con
+      // precio de la lista oficial, coordenadas reales y PIN de 4 dígitos.
+      allow create: if estaLogueado()
+                    && request.resource.data.client_uid == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.estimated_price in preciosValidos()
+                    && request.resource.data.delivery_coords.lat is number
+                    && request.resource.data.delivery_coords.lng is number
+                    && request.resource.data.delivery_pin is string
+                    && request.resource.data.delivery_pin.size() == 4
+                    && request.resource.data.get('assigned_driver_id', null) == null;
+
+      // --- Tomar una carrera ---
+      // Solo un domiciliario aprobado, solo si el pedido sigue 'pending', y
+      // solo asignándose a sí mismo. Esto es lo que impide que dos
+      // domiciliarios se queden con el mismo pedido: el segundo intento
+      // encuentra status != 'pending' y el servidor lo rechaza.
+      function tomaLaCarrera() {
+        return esDomiciliarioAprobado()
+               && resource != null
+               && resource.data.status == 'pending'
+               && request.resource.data.status == 'assigned'
+               && request.resource.data.assigned_driver_id == request.auth.uid
+               && request.resource.data.client_uid == resource.data.client_uid
+               && request.resource.data.estimated_price == resource.data.estimated_price;
+      }
+
+      // El domiciliario asignado mueve el pedido por sus estados.
+      function avanzaSuCarrera() {
+        return soyElAsignado()
+               && request.resource.data.status in ['picked_up', 'delivered']
+               && soloCambia(['status', 'updated_at', 'delivered_at', 'picked_up_at', 'driver_coords']);
+      }
+
+      // El cliente puede cancelar mientras nadie la haya tomado.
+      function cancelaSuPedido() {
+        return esMiPedido()
+               && resource.data.get('status', '') == 'pending'
+               && request.resource.data.status == 'cancelled'
+               && soloCambia(['status', 'cancelled_at']);
+      }
+
+      allow update: if tomaLaCarrera() || avanzaSuCarrera() || cancelaSuPedido() || esAdmin();
+
+      // Los pedidos no se borran: son el historial contable del negocio.
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // recharges/{rechargeId}  - solicitudes de recarga de saldo (Nequi)
+    // =========================================================================
+    match /recharges/{rechargeId} {
+
+      function esMiRecarga() {
+        return estaLogueado()
+               && resource != null
+               && resource.data.get('driver_id', '') == request.auth.uid;
+      }
+
+      allow get:  if esMiRecarga() || esAdmin();
+      allow list: if esAdmin();
+
+      // El domiciliario solicita su recarga, siempre en estado 'pending'.
+      // No puede crearla ya aprobada ni a nombre de otro.
+      allow create: if estaLogueado()
+                    && request.resource.data.driver_id == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount > 0;
+
+      // Aprobar o rechazar una recarga es exclusivo del admin.
+      // (El saldo se acredita con increment() en la misma transacción.)
+      allow update, delete: if esAdmin();
+    }
+
+    // =========================================================================
+    // Cierre por defecto: cualquier colección no declarada arriba queda
+    // bloqueada. Si mañana agregamos una colección nueva, nace protegida.
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
