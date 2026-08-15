@@ -58,3 +58,6 @@ package-lock.json
 .firebase/
 firestore-debug.log
 firebase-debug.log
+
+.vercel
+.env*

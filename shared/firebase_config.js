@@ -154,10 +154,19 @@ try {
       }
     });
 
-    // Invocación automática de sembrado de datos iniciales al arrancar
-    setTimeout(() => {
-      seedInitialFirestoreData();
-    }, 800);
+    // SEMBRADO DESACTIVADO EN PRODUCCIÓN.
+    // Mientras la apiKey era un placeholder, esta función se saltaba sola.
+    // Al poner la key real empezó a correr en cada carga de página y a
+    // crear datos falsos en la base real (users/admin_system con rol admin,
+    // users/driver_demo y orders/order_demo_001), que además ensucian el
+    // historial y las métricas del panel. Con las reglas de seguridad
+    // activas estas escrituras además fallarían y llenarían la consola de
+    // errores de permisos.
+    // Para volver a sembrar datos de ejemplo a propósito, ejecutar a mano
+    // desde la consola del navegador: seedInitialFirestoreData()
+    if (typeof window !== 'undefined' && window.UBAVOY_SEMBRAR_DATOS_DEMO === true) {
+      setTimeout(() => { seedInitialFirestoreData(); }, 800);
+    }
 
   } else {
     console.error("❌ SDK de Firebase no encontrado en el entorno.");

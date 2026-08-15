@@ -50,6 +50,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   
+  <!-- MapLibre GL: mapa vectorial libre, sin API key ni costo -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
   <!-- Shared Firebase Config & PWA Installer Engine -->
   <script src="/shared/firebase_config.js"></script>
   <script src="/shared/pwa_installer.js"></script>
@@ -383,28 +387,63 @@
     </div>
 
     <!-- MODAL SELECCIÓN GPS NAVEGACIÓN -->
-    <div id="gps-nav-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="glass-card w-full max-w-xs rounded-2xl p-5 space-y-4 border border-sky-500/50 shadow-2xl text-center">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+    <!-- ================= MAPA DE NAVEGACIÓN A LA ENTREGA ================= -->
+    <div id="gps-nav-modal" class="hidden fixed inset-0 z-50 bg-slate-950 flex-col">
+
+      <!-- Encabezado con distancia y tiempo -->
+      <div class="glass-header px-4 py-3 flex items-center justify-between shrink-0 z-10">
+        <div class="min-w-0">
           <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
-            <i class="fa-solid fa-map-location-dot text-sky-400"></i> Elegir App de Navegación
+            <i class="fa-solid fa-route text-sky-400"></i> Ruta hasta el cliente
           </h3>
-          <button onclick="closeGpsNavigationModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+          <p id="nav-address" class="text-[11px] text-slate-400 truncate max-w-[220px]">Cargando dirección...</p>
         </div>
+        <button onclick="closeGpsNavigationModal()" class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:text-white shrink-0">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
 
-        <p class="text-xs text-slate-300">¿Cómo deseas abrir la ruta hasta el cliente?</p>
+      <!-- Franja de distancia / tiempo estimado -->
+      <div class="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center gap-4 shrink-0 z-10">
+        <div>
+          <p class="text-[10px] uppercase tracking-wide text-slate-500">Distancia</p>
+          <p id="nav-distance" class="font-display font-extrabold text-base text-sky-400 leading-none">--</p>
+        </div>
+        <div class="border-l border-slate-800 pl-4">
+          <p class="text-[10px] uppercase tracking-wide text-slate-500">Tiempo aprox.</p>
+          <p id="nav-eta" class="font-display font-extrabold text-base text-emerald-400 leading-none">--</p>
+        </div>
+        <div id="nav-gps-status" class="ml-auto text-right">
+          <p class="text-[10px] uppercase tracking-wide text-slate-500">Tu GPS</p>
+          <p id="nav-gps-text" class="text-[11px] font-bold text-amber-400 leading-none">Buscando...</p>
+        </div>
+      </div>
 
-        <div class="space-y-2.5 pt-1">
-          <a id="gps-btn-gmaps" href="#" target="_blank" onclick="closeGpsNavigationModal()"
-            class="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-sky-500/40 text-sky-400 font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all">
-            <i class="fa-brands fa-google text-base"></i>
-            <span>Navegar con Google Maps</span>
+      <!-- Mapa -->
+      <div id="nav-map" class="flex-1 w-full bg-slate-900"></div>
+
+      <!-- Aviso de discrepancia de ubicación del cliente -->
+      <div id="nav-mismatch-warning" class="hidden px-4 py-2.5 bg-amber-950/90 border-t border-amber-700 shrink-0">
+        <p class="text-[11px] text-amber-200 leading-snug">
+          <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+          <span id="nav-mismatch-text"></span>
+        </p>
+      </div>
+
+      <!-- Acciones -->
+      <div class="p-3 space-y-2 bg-slate-950 border-t border-slate-800 shrink-0">
+        <button onclick="centrarRutaCompleta()" type="button"
+          class="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-2">
+          <i class="fa-solid fa-crosshairs"></i> Ver ruta completa
+        </button>
+        <div class="grid grid-cols-2 gap-2">
+          <a id="gps-btn-gmaps" href="#" target="_blank" rel="noopener"
+            class="py-3 px-3 rounded-xl bg-sky-950 hover:bg-sky-900 border border-sky-500/50 text-sky-300 font-bold text-xs flex items-center justify-center gap-2 transition-all">
+            <i class="fa-brands fa-google"></i> Google Maps
           </a>
-
-          <a id="gps-btn-waze" href="#" target="_blank" onclick="closeGpsNavigationModal()"
-            class="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all">
-            <i class="fa-solid fa-diamond-turn-right text-base"></i>
-            <span>Navegar con Waze</span>
+          <a id="gps-btn-waze" href="#" target="_blank" rel="noopener"
+            class="py-3 px-3 rounded-xl bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 font-bold text-xs flex items-center justify-center gap-2 transition-all">
+            <i class="fa-solid fa-diamond-turn-right"></i> Waze
           </a>
         </div>
       </div>
@@ -1020,17 +1059,265 @@
       renderOrdersFeed([]);
     }
 
-    function openGpsNavigationModal(lat, lng) {
-      const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-      const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+    // Registro de los pedidos que están pintados en pantalla. Evita tener
+    // que incrustar direcciones y coordenadas dentro de atributos onclick.
+    window.__ordenesEnPantalla = window.__ordenesEnPantalla || {};
 
-      document.getElementById('gps-btn-gmaps').href = gmapsUrl;
-      document.getElementById('gps-btn-waze').href = wazeUrl;
-      document.getElementById('gps-nav-modal').classList.remove('hidden');
+    function abrirNavegacionPedido(orderId) {
+      const o = window.__ordenesEnPantalla[orderId];
+      if (!o) {
+        showToast('No se encontró el pedido en pantalla', 'error');
+        return;
+      }
+      const c = o.delivery_coords || {};
+      const lat = Number(c.lat) || UBATE_CENTER.lat;
+      const lng = Number(c.lng) || UBATE_CENTER.lng;
+
+      // Ubicación real del celular del cliente al momento de pedir, si existe.
+      const d = o.client_device_coords;
+      const disp = (d && typeof d.lat === 'number' && typeof d.lng === 'number') ? d : null;
+
+      openGpsNavigationModal(lat, lng, o.delivery_address || o.destination, disp);
+    }
+
+    // ===================== NAVEGACIÓN A LA ENTREGA =====================
+    // Mapa vectorial (MapLibre + teselas gratuitas de OpenFreeMap, sin API
+    // key), posición del domiciliario en vivo por GPS y ruta real por calles
+    // calculada con OSRM. Si el ruteo falla, se dibuja una línea directa para
+    // que el domiciliario nunca se quede sin referencia.
+    let navMap = null;
+    let navMarcadorDestino = null;
+    let navMarcadorDriver = null;
+    let navWatchId = null;
+    let navDestino = null;      // { lat, lng }
+    let navPosDriver = null;    // { lat, lng }
+
+    function openGpsNavigationModal(lat, lng, direccion, coordsDispositivo) {
+      navDestino = { lat: Number(lat), lng: Number(lng) };
+
+      document.getElementById('gps-btn-gmaps').href =
+        `https://www.google.com/maps/dir/?api=1&destination=${navDestino.lat},${navDestino.lng}&travelmode=driving`;
+      document.getElementById('gps-btn-waze').href =
+        `https://waze.com/ul?ll=${navDestino.lat},${navDestino.lng}&navigate=yes`;
+
+      const elDir = document.getElementById('nav-address');
+      if (elDir) elDir.innerText = direccion || 'Entrega en Ubaté';
+
+      mostrarAvisoUbicacion(coordsDispositivo);
+
+      const modal = document.getElementById('gps-nav-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      iniciarMapaNavegacion();
+      iniciarSeguimientoGps();
     }
 
     function closeGpsNavigationModal() {
-      document.getElementById('gps-nav-modal').classList.add('hidden');
+      const modal = document.getElementById('gps-nav-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      detenerSeguimientoGps();
+    }
+
+    function iniciarMapaNavegacion() {
+      if (typeof maplibregl === 'undefined') {
+        console.warn('MapLibre no disponible; solo quedan los enlaces externos.');
+        const t = document.getElementById('nav-gps-text');
+        if (t) { t.innerText = 'Mapa no disponible'; t.className = 'text-[11px] font-bold text-rose-400 leading-none'; }
+        return;
+      }
+
+      if (navMap) {
+        // El contenedor estaba oculto: hay que recalcular tamaño.
+        setTimeout(() => { navMap.resize(); centrarRutaCompleta(); }, 60);
+        return;
+      }
+
+      navMap = new maplibregl.Map({
+        container: 'nav-map',
+        style: 'https://tiles.openfreemap.org/styles/dark',
+        center: [navDestino.lng, navDestino.lat],
+        zoom: 15,
+        attributionControl: { compact: true }
+      });
+
+      navMap.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+      navMap.on('load', () => {
+        // El mapa se crea junto con la apertura del modal; si el contenedor
+        // aún no tenía su tamaño final, el lienzo queda en negro. Este
+        // resize lo obliga a recalcularse una vez ya es visible.
+        navMap.resize();
+
+        // Marcador del destino
+        const elDestino = document.createElement('div');
+        elDestino.innerHTML =
+          '<div style="width:34px;height:34px;border-radius:50%;background:#10b981;border:3px solid #ecfdf5;' +
+          'display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px rgba(16,185,129,.9)">' +
+          '<i class="fa-solid fa-house" style="color:#022c22;font-size:14px"></i></div>';
+        navMarcadorDestino = new maplibregl.Marker({ element: elDestino })
+          .setLngLat([navDestino.lng, navDestino.lat])
+          .setPopup(new maplibregl.Popup({ offset: 22 }).setText('Entregar aquí'))
+          .addTo(navMap);
+
+        navMap.addSource('ruta', {
+          type: 'geojson',
+          data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+        });
+        navMap.addLayer({
+          id: 'ruta-linea',
+          type: 'line',
+          source: 'ruta',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: { 'line-color': '#38bdf8', 'line-width': 5, 'line-opacity': 0.9 }
+        });
+
+        if (navPosDriver) actualizarRuta();
+      });
+    }
+
+    function iniciarSeguimientoGps() {
+      const txt = document.getElementById('nav-gps-text');
+
+      if (!('geolocation' in navigator)) {
+        if (txt) { txt.innerText = 'No disponible'; txt.className = 'text-[11px] font-bold text-rose-400 leading-none'; }
+        return;
+      }
+
+      if (navWatchId !== null) return;
+
+      navWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          navPosDriver = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          const precision = Math.round(pos.coords.accuracy || 0);
+          if (txt) {
+            txt.innerText = `Activo ±${precision} m`;
+            txt.className = 'text-[11px] font-bold text-emerald-400 leading-none';
+          }
+          pintarPosicionDriver();
+          actualizarRuta();
+        },
+        (err) => {
+          if (txt) {
+            txt.innerText = err.code === 1 ? 'Permiso denegado' : 'Sin señal';
+            txt.className = 'text-[11px] font-bold text-rose-400 leading-none';
+          }
+          // Sin GPS igual se puede ver el destino en el mapa.
+          if (navMap && navDestino) navMap.flyTo({ center: [navDestino.lng, navDestino.lat], zoom: 16 });
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+      );
+    }
+
+    function detenerSeguimientoGps() {
+      if (navWatchId !== null) {
+        navigator.geolocation.clearWatch(navWatchId);
+        navWatchId = null;
+      }
+    }
+
+    function pintarPosicionDriver() {
+      if (!navMap || !navPosDriver) return;
+      if (!navMarcadorDriver) {
+        const el = document.createElement('div');
+        el.innerHTML =
+          '<div style="width:22px;height:22px;border-radius:50%;background:#f59e0b;border:3px solid #fff;' +
+          'box-shadow:0 0 12px rgba(245,158,11,.95)"></div>';
+        navMarcadorDriver = new maplibregl.Marker({ element: el })
+          .setLngLat([navPosDriver.lng, navPosDriver.lat])
+          .addTo(navMap);
+      } else {
+        navMarcadorDriver.setLngLat([navPosDriver.lng, navPosDriver.lat]);
+      }
+    }
+
+    /** Distancia en metros entre dos coordenadas (fórmula de Haversine). */
+    function distanciaMetros(a, b) {
+      const R = 6371000;
+      const rad = (x) => x * Math.PI / 180;
+      const dLat = rad(b.lat - a.lat);
+      const dLng = rad(b.lng - a.lng);
+      const s = Math.sin(dLat / 2) ** 2 +
+                Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(s));
+    }
+
+    function formatoDistancia(m) {
+      return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+    }
+
+    async function actualizarRuta() {
+      if (!navMap || !navPosDriver || !navDestino) return;
+
+      const elDist = document.getElementById('nav-distance');
+      const elEta = document.getElementById('nav-eta');
+
+      // Referencia inmediata en línea recta mientras responde el ruteo.
+      const directa = distanciaMetros(navPosDriver, navDestino);
+      if (elDist) elDist.innerText = formatoDistancia(directa);
+      if (elEta) elEta.innerText = `${Math.max(1, Math.round(directa / 250))} min`;
+
+      let coords = null;
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/` +
+                    `${navPosDriver.lng},${navPosDriver.lat};${navDestino.lng},${navDestino.lat}` +
+                    `?overview=full&geometries=geojson`;
+        const r = await fetch(url);
+        const j = await r.json();
+        if (j.routes && j.routes[0]) {
+          coords = j.routes[0].geometry.coordinates;
+          if (elDist) elDist.innerText = formatoDistancia(j.routes[0].distance);
+          if (elEta) elEta.innerText = `${Math.max(1, Math.round(j.routes[0].duration / 60))} min`;
+        }
+      } catch (e) {
+        // El servicio público de rutas puede fallar; la línea recta ya quedó.
+        console.warn('Ruteo no disponible, se usa línea directa:', e.message);
+      }
+
+      if (!coords) {
+        coords = [[navPosDriver.lng, navPosDriver.lat], [navDestino.lng, navDestino.lat]];
+      }
+
+      const src = navMap.getSource('ruta');
+      if (src) src.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords } });
+    }
+
+    function centrarRutaCompleta() {
+      if (!navMap || !navDestino) return;
+      if (!navPosDriver) {
+        navMap.flyTo({ center: [navDestino.lng, navDestino.lat], zoom: 16 });
+        return;
+      }
+      const b = new maplibregl.LngLatBounds();
+      b.extend([navPosDriver.lng, navPosDriver.lat]);
+      b.extend([navDestino.lng, navDestino.lat]);
+      navMap.fitBounds(b, { padding: 70, maxZoom: 16 });
+    }
+
+    /**
+     * Avisa si el pin del mapa y la ubicación real del celular del cliente
+     * no coinciden. La dirección escrita puede estar mal; el aparato no.
+     */
+    function mostrarAvisoUbicacion(coordsDispositivo) {
+      const caja = document.getElementById('nav-mismatch-warning');
+      const txt = document.getElementById('nav-mismatch-text');
+      if (!caja || !txt) return;
+
+      if (!coordsDispositivo || typeof coordsDispositivo.lat !== 'number') {
+        caja.classList.add('hidden');
+        return;
+      }
+
+      const separacion = distanciaMetros(navDestino, coordsDispositivo);
+      if (separacion > 250) {
+        txt.innerText =
+          `El celular del cliente estaba a ${formatoDistancia(separacion)} de la dirección que escribió. ` +
+          `Confirma por WhatsApp antes de salir.`;
+        caja.classList.remove('hidden');
+      } else {
+        caja.classList.add('hidden');
+      }
     }
 
     function renderOrdersFeed(orders) {
@@ -1069,6 +1356,8 @@
         // número para que un valor manipulado no pueda inyectar JavaScript.
         const lat = Number(coords.lat) || UBATE_CENTER.lat;
         const lng = Number(coords.lng) || UBATE_CENTER.lng;
+        // Se guarda el pedido para que el botón de navegación lo consulte.
+        window.__ordenesEnPantalla[order.id] = order;
 
         return `
           <div class="glass-card rounded-2xl p-4 space-y-3 border border-slate-800 hover:border-amber-500/40 transition-all shadow-lg">
@@ -1092,7 +1381,7 @@
 
             <div class="pt-2 flex flex-col gap-2 border-t border-slate-800/60">
               <div class="flex items-center justify-between gap-2">
-                <button onclick="openGpsNavigationModal(${lat}, ${lng})"
+                <button onclick="abrirNavegacionPedido('${order.id}')"
                   class="text-[11px] font-bold text-sky-400 bg-sky-950/80 hover:bg-sky-900 border border-sky-800 px-2.5 py-1.5 rounded-xl flex items-center gap-1">
                   <i class="fa-solid fa-map-location-dot"></i> GPS Navegación
                 </button>
@@ -1209,6 +1498,8 @@
         // número para que un valor manipulado no pueda inyectar JavaScript.
         const lat = Number(coords.lat) || UBATE_CENTER.lat;
         const lng = Number(coords.lng) || UBATE_CENTER.lng;
+        // Se guarda el pedido para que el botón de navegación lo consulte.
+        window.__ordenesEnPantalla[order.id] = order;
 
         return `
           <div class="glass-card rounded-2xl p-4 space-y-3 border border-emerald-500/50 shadow-xl bg-slate-900/90">
@@ -1226,7 +1517,7 @@
             </div>
 
             <div class="pt-2 flex items-center justify-between border-t border-slate-800">
-              <button onclick="openGpsNavigationModal(${lat}, ${lng})"
+              <button onclick="abrirNavegacionPedido('${order.id}')"
                 class="text-[11px] font-bold text-sky-400 bg-sky-950 hover:bg-sky-900 border border-sky-800 px-3 py-1.5 rounded-xl flex items-center gap-1">
                 <i class="fa-solid fa-map-location-dot"></i> GPS Navegación
               </button>

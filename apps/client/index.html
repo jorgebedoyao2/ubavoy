@@ -457,6 +457,41 @@
       }
     }
 
+    /** Distancia en metros entre dos coordenadas (fórmula de Haversine). */
+    function distanciaEnMetros(a, b) {
+      if (!a || !b) return 0;
+      const R = 6371000;
+      const rad = (x) => x * Math.PI / 180;
+      const dLat = rad(b.lat - a.lat);
+      const dLng = rad(b.lng - a.lng);
+      const s = Math.sin(dLat / 2) ** 2 +
+                Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(s));
+    }
+
+    /**
+     * Lee el GPS del celular sin bloquear el pedido: si la persona niega el
+     * permiso o el GPS demora, se devuelve null y el pedido sigue su curso.
+     */
+    function obtenerUbicacionDispositivo() {
+      return new Promise((resolve) => {
+        if (!('geolocation' in navigator)) return resolve(null);
+        let resuelto = false;
+        const terminar = (v) => { if (!resuelto) { resuelto = true; resolve(v); } };
+        setTimeout(() => terminar(null), 6000);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => terminar({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: Math.round(pos.coords.accuracy || 0),
+            captured_at: new Date().toISOString()
+          }),
+          () => terminar(null),
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+        );
+      });
+    }
+
     // Envío del Formulario
     function bindOrderFormHandler() {
       const orderForm = document.getElementById('orderForm') || document.querySelector('form');
@@ -503,6 +538,28 @@
           delivery_pin: deliveryPin,
           created_at: new Date().toISOString()
         };
+
+        // Ubicación real del celular al momento de pedir. NO reemplaza al pin
+        // del mapa (el cliente puede pedir para otra dirección a propósito),
+        // pero le sirve al domiciliario para detectar direcciones mal escritas.
+        const coordsDispositivo = await obtenerUbicacionDispositivo();
+        if (coordsDispositivo) {
+          newOrder.client_device_coords = coordsDispositivo;
+          const separacion = distanciaEnMetros(newOrder.delivery_coords, coordsDispositivo);
+          newOrder.location_mismatch_m = Math.round(separacion);
+
+          if (separacion > 250) {
+            const seguir = confirm(
+              `Estás a ${separacion > 1000 ? (separacion/1000).toFixed(1) + ' km' : Math.round(separacion) + ' m'} ` +
+              `del punto que marcaste en el mapa.\n\n` +
+              `¿La entrega es en el punto del mapa (Aceptar) o prefieres corregirlo (Cancelar)?`
+            );
+            if (!seguir) {
+              showToast("Ajusta el pin del mapa a la dirección de entrega.", "warning");
+              return;
+            }
+          }
+        }
 
         if (typeof generateOrderHash === 'function') {
           try {
