@@ -533,7 +533,10 @@
       if (activeOrderUnsubscribe) activeOrderUnsubscribe();
 
       activeOrderUnsubscribe = db.collection('orders').doc(orderId).onSnapshot((docSnap) => {
-        if (!docSnap.exists()) return;
+        // El SDK compat expone .exists como propiedad booleana; el modular como
+        // función. Se soportan ambos para que el callback no muera aquí.
+        const existeDoc = (typeof docSnap.exists === "function") ? docSnap.exists() : docSnap.exists;
+        if (!existeDoc) return;
         const order = docSnap.data();
 
         const card = document.getElementById('active-order-tracking-card');

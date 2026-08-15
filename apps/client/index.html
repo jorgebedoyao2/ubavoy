@@ -585,7 +585,10 @@
 
       const orderRef = doc(db, "orders", orderId);
       activeOrderUnsubscribe = onSnapshot(orderRef, (docSnap) => {
-        if (!docSnap.exists()) return;
+        // El SDK compat expone .exists como propiedad booleana; el modular como
+        // función. Se soportan ambos para que el callback no muera aquí.
+        const existeDoc = (typeof docSnap.exists === "function") ? docSnap.exists() : docSnap.exists;
+        if (!existeDoc) return;
         const order = docSnap.data();
 
         // Actualizar PIN y UI
