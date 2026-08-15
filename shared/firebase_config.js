@@ -61,23 +61,29 @@ async function addDoc(collRef, payload) {
 }
 
 function doc(dbInstance, collectionName, docId) {
-  let targetDb = dbInstance;
-  let coll = collectionName;
-  let id = docId;
+  const fallbackDb = (typeof window !== 'undefined' && window.db) ? window.db : db;
 
+  // Caso 1 (SDK v10): doc(db, "orders", "abc123")
+  // Debe ir PRIMERO: el objeto db de Firestore tiene .collection() y
+  // también .doc(), así que si se evalúa .doc() antes, se construye la
+  // referencia "orders" (1 segmento) y se pierde el ID, provocando
+  // "Document references must have an even number of segments".
+  if (dbInstance && typeof dbInstance.collection === 'function' && collectionName && docId) {
+    return dbInstance.collection(collectionName).doc(docId);
+  }
+
+  // Caso 2: doc("orders", "abc123") sin instancia de base de datos.
   if (typeof dbInstance === 'string' && typeof collectionName === 'string' && !docId) {
-    coll = dbInstance;
-    id = collectionName;
-    targetDb = (typeof window !== 'undefined' && window.db) ? window.db : db;
-  } else if (dbInstance && typeof dbInstance.doc === 'function') {
+    return fallbackDb.collection(dbInstance).doc(collectionName);
+  }
+
+  // Caso 3: doc(referenciaDeColeccion, "abc123")
+  if (dbInstance && typeof dbInstance.doc === 'function' && !docId) {
     return dbInstance.doc(collectionName);
   }
 
-  if (targetDb && typeof targetDb.collection === 'function') {
-    return targetDb.collection(coll).doc(id);
-  }
-  const fallbackDb = (typeof window !== 'undefined' && window.db) ? window.db : db;
-  return fallbackDb.collection(coll).doc(id);
+  // Caso 4: último recurso con la base de datos global.
+  return fallbackDb.collection(collectionName).doc(docId);
 }
 
 function query(collRef, ...queryConstraints) {

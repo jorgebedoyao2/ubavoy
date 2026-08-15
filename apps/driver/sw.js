@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ubavoy-driver-v10.2';
+const CACHE_NAME = 'ubavoy-driver-v10.3';
 const ASSETS_TO_CACHE = [
   '/apps/driver/manifest.json',
   '/icon-192.svg',

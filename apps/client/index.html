@@ -470,12 +470,21 @@
 
         console.log("🚀 Ejecutando envío JS a Firestore sin recarga de página...");
 
+        // Bloqueo de doble envío: en conexiones lentas un doble toque
+        // creaba dos pedidos duplicados (y dos cobros).
+        if (submitBtn && submitBtn.dataset.enviando === '1') return;
+
         const taskDesc = document.getElementById('taskDesc')?.value?.trim();
         const deliveryAddress = document.getElementById('deliveryAddress')?.value?.trim();
-        const clientPhone = document.getElementById('clientPhone')?.value?.trim() || '3044834698';
+        const clientPhone = document.getElementById('clientPhone')?.value?.trim();
+
+        if (!clientPhone || clientPhone.replace(/\D/g, '').length < 10) {
+          showToast("Escribe tu número de WhatsApp para que el domiciliario te ubique.", "error");
+          return;
+        }
 
         if (!taskDesc || !deliveryAddress) {
-          alert("Por favor completa la descripción del mandado y la dirección de entrega.");
+          showToast("Falta la descripción del mandado o la dirección de entrega.", "error");
           return;
         }
 
@@ -501,6 +510,14 @@
           } catch (hErr) {}
         }
 
+        const textoOriginalBoton = submitBtn ? submitBtn.innerHTML : null;
+        if (submitBtn) {
+          submitBtn.dataset.enviando = '1';
+          submitBtn.disabled = true;
+          submitBtn.classList.add('opacity-60', 'pointer-events-none');
+          submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Publicando tu mandado...';
+        }
+
         try {
           const collRef = collection(targetDb || db, "orders");
           const docRef = await addDoc(collRef, newOrder);
@@ -509,9 +526,7 @@
           localStorage.setItem('ubavoy_active_order_id', docRef.id);
           localStorage.setItem('ubavoy_active_order', docRef.id);
 
-          alert(`✅ PEDIDO PUBLICADO CON ÉXITO. ID: ${docRef.id}\nPIN de Entrega: ${deliveryPin}`);
-
-          startTrackingAndHistory(docRef.id, clientPhone);
+          showToast(`¡Pedido publicado! Tu PIN de entrega es ${deliveryPin}`, "success");
 
           if (orderForm && typeof orderForm.reset === 'function') {
             orderForm.reset();
@@ -520,9 +535,25 @@
             document.getElementById('clientPhone').value = clientPhone;
           }
 
+          // El rastreo va en su propio try: si algo falla aquí, el pedido YA
+          // quedó guardado, y avisarle "error de conexión" al cliente lo hace
+          // pedir dos veces. Solo se registra y se sigue.
+          try {
+            startTrackingAndHistory(docRef.id, clientPhone);
+          } catch (errRastreo) {
+            console.error("Pedido creado, pero falló iniciar el rastreo:", errRastreo);
+          }
+
         } catch (error) {
           console.error("❌ Error guardando en Firestore:", error);
-          alert("Error de conexión a la base de datos: " + error.message);
+          showToast("No pudimos publicar tu pedido. Revisa tu conexión e inténtalo de nuevo.", "error");
+        } finally {
+          if (submitBtn) {
+            submitBtn.dataset.enviando = '0';
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('opacity-60', 'pointer-events-none');
+            if (textoOriginalBoton !== null) submitBtn.innerHTML = textoOriginalBoton;
+          }
         }
       };
 
