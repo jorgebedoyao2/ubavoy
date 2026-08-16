@@ -693,6 +693,16 @@
         // creaba dos pedidos duplicados (y dos cobros).
         if (submitBtn && submitBtn.dataset.enviando === '1') return;
 
+        // El pedido queda a nombre de una cuenta real. Es lo que permite que
+        // solo su dueño lo lea después, y lo que exigen las reglas de la
+        // base de datos.
+        const usuarioActual = (typeof auth !== 'undefined' && auth) ? auth.currentUser : null;
+        if (!usuarioActual) {
+          showToast('Entra con tu cuenta de Google para pedir tu mandado.', 'error');
+          openAuthModal();
+          return;
+        }
+
         const taskDesc = document.getElementById('taskDesc')?.value?.trim();
         const deliveryAddress = document.getElementById('deliveryAddress')?.value?.trim();
         const clientPhone = document.getElementById('clientPhone')?.value?.trim();
@@ -713,6 +723,8 @@
         console.log("🔥 1. INICIANDO CONEXIÓN A FIRESTORE...", { db: targetDb, taskDesc, deliveryAddress, clientPhone });
 
         const newOrder = {
+          client_uid: usuarioActual.uid,
+          client_email: (usuarioActual.email || '').toLowerCase().trim(),
           client_phone: clientPhone,
           task_description: taskDesc,
           delivery_address: deliveryAddress,
@@ -921,16 +933,26 @@
     // Función de Historial por Teléfono o Email
     function startHistoryListener(queryValue) {
       const targetDb = (typeof db !== 'undefined' && db) ? db : (window.db || null);
-      if (!queryValue || !targetDb) return;
+      if (!targetDb) return;
 
       if (historyUnsubscribe) historyUnsubscribe();
 
-      let q;
-      if (typeof queryValue === 'string' && queryValue.includes('@')) {
-        q = query(collection(targetDb, "orders"), where("client_email", "==", queryValue));
-      } else {
-        q = query(collection(targetDb, "orders"), where("client_phone", "==", queryValue));
+      // El historial se consulta por la cuenta, no por el teléfono: las
+      // reglas solo dejan leer los pedidos propios, y cualquiera podría
+      // escribir el teléfono de otra persona para espiar sus pedidos.
+      const usuarioActual = (typeof auth !== 'undefined' && auth) ? auth.currentUser : null;
+      if (!usuarioActual) {
+        const cont = document.getElementById('historyContainer');
+        if (cont) {
+          cont.innerHTML = `
+            <div class="text-center text-[11px] text-slate-500 py-4">
+              Entra con tu cuenta de Google para ver tus pedidos anteriores.
+            </div>`;
+        }
+        return;
       }
+
+      const q = query(collection(targetDb, "orders"), where("client_uid", "==", usuarioActual.uid));
 
       historyUnsubscribe = onSnapshot(q, (snapshot) => {
         const historyContainer = document.getElementById('historyContainer');
@@ -1004,12 +1026,29 @@
         currentClient.photoURL = user.photoURL;
 
         if (typeof db !== 'undefined' && db) {
-          await db.collection('users').doc(user.uid).set({
-            name: user.displayName || 'Cliente UbaVoy',
-            email: user.email,
-            role: 'client',
-            updated_at: new Date().toISOString()
-          }, { merge: true });
+          const refPerfil = db.collection('users').doc(user.uid);
+          const snap = await refPerfil.get();
+
+          if (!snap.exists) {
+            await refPerfil.set({
+              uid: user.uid,
+              name: user.displayName || 'Cliente UbaVoy',
+              email: (user.email || '').toLowerCase().trim(),
+              role: 'client',
+              is_approved: false,
+              balance: 0,
+              created_at: new Date().toISOString()
+            });
+          } else {
+            // OJO: aquí NO se toca 'role'. Si el dueño o un domiciliario
+            // entran por la app cliente, escribir role:'client' les quitaría
+            // su rol real y el acceso al panel de administración.
+            await refPerfil.update({
+              name: user.displayName || snap.data().name || 'Cliente UbaVoy',
+              email: (user.email || '').toLowerCase().trim(),
+              updated_at: new Date().toISOString()
+            });
+          }
         }
 
         localStorage.setItem('ubavoy_client_user', JSON.stringify(currentClient));

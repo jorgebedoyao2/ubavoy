@@ -158,6 +158,31 @@
       </button>
     </header>
 
+    <!-- ============ PUERTA DE ACCESO: SESIÓN Y APROBACIÓN ============ -->
+    <div id="acceso-bloqueado" class="hidden flex-1 flex-col items-center justify-center px-7 text-center py-14">
+      <div class="w-20 h-20 rounded-2xl bg-amber-500/15 border-2 border-amber-500/50 flex items-center justify-center mb-5">
+        <i class="fa-solid fa-user-shield text-amber-400 text-3xl"></i>
+      </div>
+      <h2 id="acceso-titulo" class="font-display font-extrabold text-xl text-white mb-2">Ingresa para trabajar</h2>
+      <p id="acceso-texto" class="text-xs text-slate-400 mb-2 max-w-xs leading-relaxed">
+        Entra con tu cuenta de Google para ver las carreras disponibles en Ubaté.
+      </p>
+      <p id="acceso-correo" class="hidden text-[11px] font-mono text-amber-400 bg-amber-950/60 px-3 py-1 rounded-lg border border-amber-800 mb-4"></p>
+
+      <button type="button" id="acceso-btn-entrar" onclick="handleGoogleAuthDriver()"
+        class="w-full max-w-xs mt-3 py-3.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-800 font-bold text-sm flex items-center justify-center gap-2.5 shadow-lg transition-all active:scale-95">
+        <i class="fa-brands fa-google text-lg"></i> Entrar con Google
+      </button>
+
+      <button type="button" id="acceso-btn-salir" onclick="cerrarSesionDomiciliario()"
+        class="hidden w-full max-w-xs mt-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 font-bold text-xs transition-all">
+        Cerrar sesión
+      </button>
+    </div>
+
+    <!-- CONTENIDO REAL DE LA APP (solo para domiciliarios aprobados) -->
+    <div id="driver-main-content" class="hidden flex-1 flex flex-col">
+
     <!-- BANNER DE INSTALACIÓN PWA 1-TAP NATIVE INSTALLER -->
     <div class="px-4 pt-3 pb-0">
       <button id="pwaInstallBtnDriver" onclick="installPwaAppDirect('driver')"
@@ -306,6 +331,8 @@
       </div>
 
     </main>
+
+    </div><!-- /driver-main-content -->
 
     <!-- MODAL ERROR DE AUTORIZACIÓN EMAIL RESTRENGIDO -->
     <div id="unauthorized-modal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
@@ -565,17 +592,22 @@
     let audioCtx = null;
     let alarmTimer = null;
 
-    let currentDriver = JSON.parse(localStorage.getItem('ubavoy_driver_user') || JSON.stringify({
+    // Identidad del domiciliario. Arranca VACÍA y sin aprobar: la fuente de
+    // verdad es el documento users/{uid} en Firestore, no este objeto ni el
+    // localStorage. Antes venía con is_approved:true y saldo $10.000, lo que
+    // permitía ver la bolsa de carreras y los datos de los clientes con solo
+    // abrir la URL, sin iniciar sesión.
+    let currentDriver = {
       uid: null,
       email: null,
       photoURL: null,
-      phone: '3100000000',
-      name: 'Carlos Domiciliario',
-      vehicle: 'Moto FZ 150 - ABC-123',
-      balance: 10000,
-      is_approved: true,
+      phone: '',
+      name: '',
+      vehicle: '',
+      balance: 0,
+      is_approved: false,
       role: 'driver'
-    }));
+    };
 
     let audioUnlocked = false;
 
@@ -600,11 +632,144 @@
 
       refrescarPuertaDeAudio();
 
-      // INICIAR DISPONIBILIDAD Y CONEXIÓN
-      isAvailable = true;
-      updateAvailabilityUI();
-      startDriverFirestoreRealtime();
+      // La bolsa de carreras ya NO se abre sola: primero hay que saber quién
+      // es la persona y si el administrador la aprobó.
+      vigilarSesionDomiciliario();
     });
+
+    /**
+     * Única puerta de entrada del domiciliario. Firebase avisa aquí cuando
+     * hay o deja de haber sesión, y de ahí se decide qué puede ver.
+     */
+    function vigilarSesionDomiciliario() {
+      if (typeof auth === 'undefined' || !auth) {
+        console.error('Firebase Auth no disponible');
+        return;
+      }
+
+      auth.onAuthStateChanged(async (user) => {
+        if (!user) {
+          currentDriver = {
+            uid: null, email: null, photoURL: null, phone: '', name: '',
+            vehicle: '', balance: 0, is_approved: false, role: 'driver'
+          };
+          detenerCanalDeCarreras();
+          mostrarEstadoAcceso('sin-sesion');
+          updateHeaderUserUI();
+          return;
+        }
+
+        try {
+          const perfil = await cargarPerfilDomiciliario(user);
+          currentDriver = perfil;
+          updateHeaderUserUI();
+
+          if (perfil.is_approved === true) {
+            mostrarEstadoAcceso('aprobado');
+            isAvailable = true;
+            updateAvailabilityUI();
+            startDriverFirestoreRealtime();
+            refrescarPuertaDeAudio();
+          } else {
+            detenerCanalDeCarreras();
+            mostrarEstadoAcceso('pendiente');
+          }
+        } catch (e) {
+          console.error('Error cargando el perfil del domiciliario:', e);
+          showToast('No se pudo cargar tu perfil: ' + (e.code || e.message), 'error');
+          mostrarEstadoAcceso('sin-sesion');
+        }
+      });
+    }
+
+    /**
+     * Lee users/{uid}. Si es la primera vez, crea la solicitud de ingreso
+     * sin aprobar y con saldo en cero: aprobar y acreditar es potestad
+     * exclusiva del administrador.
+     */
+    async function cargarPerfilDomiciliario(user) {
+      const targetDb = (typeof db !== 'undefined' && db) ? db : window.db;
+      const ref = targetDb.collection('users').doc(user.uid);
+      const snap = await ref.get();
+
+      if (!snap.exists) {
+        const nuevo = {
+          uid: user.uid,
+          email: (user.email || '').toLowerCase().trim(),
+          name: user.displayName || 'Domiciliario',
+          photoURL: user.photoURL || '',
+          phone: '',
+          vehicle: '',
+          role: 'driver',
+          is_approved: false,
+          balance: 0,
+          created_at: new Date().toISOString()
+        };
+        await ref.set(nuevo);
+        return nuevo;
+      }
+
+      const data = snap.data();
+      return {
+        uid: user.uid,
+        email: (user.email || '').toLowerCase().trim(),
+        name: data.name || user.displayName || 'Domiciliario',
+        photoURL: user.photoURL || data.photoURL || '',
+        phone: data.phone || '',
+        vehicle: data.vehicle || '',
+        role: data.role || 'driver',
+        is_approved: data.is_approved === true,
+        balance: Number(data.balance) || 0
+      };
+    }
+
+    /** Muestra la pantalla que corresponda: login, "en revisión" o la app. */
+    function mostrarEstadoAcceso(estado) {
+      const bloqueo = document.getElementById('acceso-bloqueado');
+      const contenido = document.getElementById('driver-main-content');
+      const titulo = document.getElementById('acceso-titulo');
+      const texto = document.getElementById('acceso-texto');
+      const btnEntrar = document.getElementById('acceso-btn-entrar');
+      const btnSalir = document.getElementById('acceso-btn-salir');
+      const correo = document.getElementById('acceso-correo');
+
+      if (!bloqueo || !contenido) return;
+
+      if (estado === 'aprobado') {
+        bloqueo.classList.add('hidden');
+        bloqueo.classList.remove('flex');
+        contenido.classList.remove('hidden');
+        return;
+      }
+
+      contenido.classList.add('hidden');
+      bloqueo.classList.remove('hidden');
+      bloqueo.classList.add('flex');
+
+      if (estado === 'pendiente') {
+        titulo.innerText = 'Tu cuenta está en revisión';
+        texto.innerText = 'El administrador de UbaVoy debe aprobarte antes de que puedas ver y tomar carreras. Te avisaremos apenas quede lista.';
+        btnEntrar.classList.add('hidden');
+        btnSalir.classList.remove('hidden');
+        correo.innerText = currentDriver.email || '';
+        correo.classList.remove('hidden');
+      } else {
+        titulo.innerText = 'Ingresa para trabajar';
+        texto.innerText = 'Entra con tu cuenta de Google para ver las carreras disponibles en Ubaté.';
+        btnEntrar.classList.remove('hidden');
+        btnSalir.classList.add('hidden');
+        correo.classList.add('hidden');
+      }
+    }
+
+    function detenerCanalDeCarreras() {
+      if (typeof unsubscribeOrders !== 'undefined' && unsubscribeOrders) {
+        try { unsubscribeOrders(); } catch (e) {}
+        unsubscribeOrders = null;
+      }
+      stopSustainedAlarm();
+      pedidoEnCurso = null;
+    }
 
     /**
      * Desbloquea el audio y pide permiso de notificaciones. Debe llamarse
@@ -643,11 +808,18 @@
       refrescarPuertaDeAudio();
     }
 
-    /** Muestra la puerta solo mientras el audio siga bloqueado. */
+    /**
+     * Muestra la puerta de sonido solo cuando tiene sentido: con la sesión
+     * iniciada y la cuenta aprobada. Antes aparecía incluso en la pantalla de
+     * ingreso, pidiendo activar alertas de carreras que aún no podía recibir.
+     */
     function refrescarPuertaDeAudio() {
       const gate = document.getElementById('audioGate');
       if (!gate) return;
-      if (audioUnlocked) {
+
+      const puedeRecibirCarreras = !!currentDriver.uid && currentDriver.is_approved === true;
+
+      if (audioUnlocked || !puedeRecibirCarreras) {
         gate.classList.add('hidden');
         gate.classList.remove('flex');
       } else {
@@ -812,7 +984,7 @@
       }
       const pin = String(Math.floor(1000 + Math.random() * 9000));
       const pedido = {
-        client_uid: 'PRUEBA_' + (currentDriver.uid || 'local'),
+        client_uid: currentDriver.uid || 'PRUEBA_local',
         client_phone: '3000000000',
         task_description: '🧪 PEDIDO DE PRUEBA - ignorar',
         delivery_address: 'Plaza Principal, Ubaté',
@@ -877,49 +1049,34 @@
           Notification.requestPermission();
         }
 
-        const result = await signInWithGoogle();
-        const user = result.user;
-        const email = (user.email || '').toLowerCase().trim();
-
-        if (typeof db !== 'undefined' && db !== null) {
-          let isApproved = false;
-          let driverData = null;
-
-          const querySnap = await db.collection('users')
-            .where('email', '==', email)
-            .get();
-
-          if (!querySnap.empty) {
-            querySnap.forEach(doc => {
-              const data = doc.data();
-              if (data.is_approved === true && (data.role === 'driver' || !data.role)) {
-                isApproved = true;
-                driverData = data;
-              }
-            });
-          }
-
-          if (!isApproved) {
-            await signOutUser();
-            openUnauthorizedModal(email);
-            return;
-          }
-
-          currentDriver.uid = user.uid;
-          currentDriver.email = email;
-          currentDriver.name = user.displayName || driverData?.name || currentDriver.name;
-          currentDriver.photoURL = user.photoURL;
-          currentDriver.balance = driverData?.balance !== undefined ? driverData.balance : currentDriver.balance;
-
-          localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
-          updateHeaderUserUI();
-          closeAuthModal();
-          showToast(`¡Bienvenido Domiciliario ${user.displayName}!`);
-          startDriverFirestoreRealtime();
-        }
+        // Solo se abre la ventana de Google. Todo lo demás (leer el perfil,
+        // verificar la aprobación y abrir o no la bolsa de carreras) lo hace
+        // vigilarSesionDomiciliario(), que es el único lugar que decide.
+        await signInWithGoogle();
+        closeAuthModal();
       } catch (err) {
         console.error("Error Google Auth Driver:", err);
-        showToast('No se pudo iniciar sesión con Google', 'error');
+        if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+          return; // La persona cerró la ventana a propósito.
+        }
+        if (err.code === 'auth/popup-blocked') {
+          showToast('Tu navegador bloqueó la ventana de Google. Habilita las ventanas emergentes.', 'error');
+          return;
+        }
+        if (err.code === 'auth/unauthorized-domain') {
+          showToast('Este dominio no está autorizado en Firebase.', 'error');
+          return;
+        }
+        showToast('No se pudo iniciar sesión: ' + (err.code || err.message), 'error');
+      }
+    }
+
+    async function cerrarSesionDomiciliario() {
+      try {
+        await signOutUser();
+        showToast('Sesión cerrada');
+      } catch (e) {
+        console.error('Error cerrando sesión:', e);
       }
     }
 
@@ -982,23 +1139,34 @@
         return;
       }
 
+      if (!currentDriver.uid) {
+        showToast('Primero entra con tu cuenta de Google', 'error');
+        return;
+      }
+
       currentDriver.name = name;
       currentDriver.phone = phone;
       currentDriver.vehicle = vehicle || 'Moto';
 
-      localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
-
-      if (typeof db !== 'undefined' && db !== null) {
-        try {
-          const docId = currentDriver.uid || phone;
-          await db.collection('users').doc(docId).set(currentDriver, { merge: true });
-        } catch (err) {}
+      try {
+        const targetDb = (typeof db !== 'undefined' && db) ? db : window.db;
+        // Solo datos de contacto. El rol, la aprobación y el saldo los
+        // controla el administrador; las reglas rechazan cualquier intento
+        // de tocarlos desde aquí.
+        await targetDb.collection('users').doc(currentDriver.uid).update({
+          name: currentDriver.name,
+          phone: currentDriver.phone,
+          vehicle: currentDriver.vehicle
+        });
+      } catch (err) {
+        console.error('Error guardando el perfil:', err);
+        showToast('No se pudo guardar el perfil: ' + (err.code || err.message), 'error');
+        return;
       }
 
       updateHeaderUserUI();
       closeAuthModal();
-      showToast(`¡Perfil de Domiciliario ${name} guardado!`);
-      startDriverFirestoreRealtime();
+      showToast(`Perfil guardado, ${name}`);
     }
 
     async function handleSendRechargeReceipt(e) {
@@ -1010,7 +1178,7 @@
 
       try {
         const rechargeData = {
-          driver_id: currentDriver.uid || currentDriver.phone || 'driver_guest',
+          driver_id: currentDriver.uid,
           driver_email: currentDriver.email || 'driver@ubavoy.com',
           driver_name: currentDriver.name || 'Domiciliario UbaVoy',
           amount: amount,
@@ -1045,7 +1213,7 @@
         const pendingOrders = [];
         const assignedOrders = [];
         const completedOrders = [];
-        const driverId = currentDriver.uid || currentDriver.phone;
+        const driverId = currentDriver.uid;
 
         // Una carrera es "mía" si coincide el uid de la cuenta o el teléfono.
         // Se comparan ambos porque las carreras viejas se guardaron con el
@@ -1684,42 +1852,78 @@
       }).join('');
     }
 
+    const COSTO_CARRERA = 500;
+
+    /**
+     * Toma una carrera de forma ATÓMICA.
+     *
+     * Antes esto era un simple update: dos domiciliarios podían aceptar el
+     * mismo pedido y el saldo solo bajaba en localStorage, así que borrar los
+     * datos del navegador equivalía a saldo infinito.
+     *
+     * Ahora una transacción de Firestore vuelve a leer el pedido y el saldo en
+     * el servidor y aborta si el pedido ya lo tomaron o si no alcanza la
+     * plata. El descuento queda escrito en users/{uid}.
+     */
     async function acceptOrder(orderId) {
       stopSustainedAlarm();
 
-      if (currentDriver.is_approved === false) {
-        showToast('⚠️ Tu cuenta no ha sido aprobada por el Administrador.', 'error');
+      if (!currentDriver.uid) {
+        showToast('Inicia sesión con Google para tomar carreras', 'error');
+        return;
+      }
+      if (currentDriver.is_approved !== true) {
+        showToast('Tu cuenta aún no ha sido aprobada por el administrador.', 'error');
         return;
       }
 
-      if ((currentDriver.balance || 0) < 500) {
-        showToast('Saldo insuficiente ($500 COP). ¡Recarga saldo!', 'error');
-        openRechargeModal();
-        return;
-      }
+      const targetDb = (typeof db !== 'undefined' && db) ? db : window.db;
+      const refPedido = targetDb.collection('orders').doc(orderId);
+      const refPerfil = targetDb.collection('users').doc(currentDriver.uid);
 
       try {
-        const driverId = currentDriver.uid || currentDriver.phone;
-        const newBalance = (currentDriver.balance || 10000) - 500;
+        const saldoFinal = await targetDb.runTransaction(async (tx) => {
+          const [pedidoSnap, perfilSnap] = await Promise.all([tx.get(refPedido), tx.get(refPerfil)]);
 
-        await db.collection('orders').doc(orderId).update({
-          status: 'assigned',
-          assigned_driver_id: driverId,
-          driver_id: driverId,
-          driver_name: currentDriver.name,
-          driver_phone: currentDriver.phone,
-          driver_vehicle: currentDriver.vehicle,
-          assigned_at: new Date().toISOString()
+          if (!pedidoSnap.exists) throw new Error('PEDIDO_NO_EXISTE');
+
+          const pedido = pedidoSnap.data();
+          if ((pedido.status || '').toLowerCase() !== 'pending') throw new Error('YA_TOMADA');
+
+          const saldoActual = Number(perfilSnap.exists ? perfilSnap.data().balance : 0) || 0;
+          if (saldoActual < COSTO_CARRERA) throw new Error('SALDO_INSUFICIENTE');
+
+          tx.update(refPedido, {
+            status: 'assigned',
+            assigned_driver_id: currentDriver.uid,
+            driver_name: currentDriver.name || 'Domiciliario',
+            driver_phone: currentDriver.phone || '',
+            driver_vehicle: currentDriver.vehicle || '',
+            assigned_at: new Date().toISOString(),
+            client_uid: pedido.client_uid,
+            estimated_price: pedido.estimated_price
+          });
+
+          tx.update(refPerfil, { balance: saldoActual - COSTO_CARRERA });
+          return saldoActual - COSTO_CARRERA;
         });
 
-        currentDriver.balance = newBalance;
-        localStorage.setItem('ubavoy_driver_user', JSON.stringify(currentDriver));
+        currentDriver.balance = saldoFinal;
         updateHeaderUserUI();
+        showToast(`¡Carrera aceptada! Te quedan $${saldoFinal.toLocaleString('es-CO')} de saldo.`);
 
-        showToast('🎉 ¡Carrera Aceptada! Comisión de $500 COP descontada.');
       } catch (err) {
-        console.error("Error al aceptar carrera:", err);
-        showToast('No se pudo aceptar la carrera: ' + err.message, 'error');
+        console.error('Error al aceptar carrera:', err);
+        if (err.message === 'YA_TOMADA') {
+          showToast('Otro domiciliario tomó esta carrera primero.', 'warning');
+        } else if (err.message === 'SALDO_INSUFICIENTE') {
+          showToast(`Necesitas al menos $${COSTO_CARRERA} de saldo para tomar la carrera.`, 'error');
+          openRechargeModal();
+        } else if (err.message === 'PEDIDO_NO_EXISTE') {
+          showToast('Esta carrera ya no está disponible.', 'warning');
+        } else {
+          showToast('No se pudo aceptar: ' + (err.code || err.message), 'error');
+        }
       }
     }
 

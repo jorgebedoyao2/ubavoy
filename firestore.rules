@@ -47,8 +47,20 @@ service cloud.firestore {
       return datosDe(request.auth.uid).role;
     }
 
+    // Correo del dueño de la plataforma. Se reconoce como administrador
+    // aunque su documento en 'users' no exista o se pierda, lo que evita el
+    // problema del huevo y la gallina: las reglas impiden que alguien se
+    // autoproclame admin, así que sin esto nadie podría serlo la primera vez.
+    // Se exige email_verified para que valga solo con la cuenta real de
+    // Google, no con un correo escrito a mano.
+    function esDuenoDeLaPlataforma() {
+      return estaLogueado()
+             && request.auth.token.get('email', '') == 'devsites02@gmail.com'
+             && request.auth.token.get('email_verified', false) == true;
+    }
+
     function esAdmin() {
-      return existeMiPerfil() && miRol() == 'admin';
+      return esDuenoDeLaPlataforma() || (existeMiPerfil() && miRol() == 'admin');
     }
 
     function esDomiciliarioAprobado() {

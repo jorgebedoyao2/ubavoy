@@ -52,6 +52,8 @@
   <!-- Firebase Compatibility SDKs (v10) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <!-- Auth: sin este SDK el ingreso con Google del administrador no existe -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   
   <!-- Shared Firebase Config File -->
   <script src="/shared/firebase_config.js"></script>
@@ -102,23 +104,36 @@
     </header>
 
     <!-- GATE DE ACCESO POR PIN SEGURO -->
+    <!-- ============================================================
+         ACCESO DE ADMINISTRADOR
+         Antes era un PIN escrito en el JavaScript de la página: cualquiera
+         podía leerlo en el código fuente, o saltárselo con una línea en la
+         consola del navegador. Ahora se entra con la cuenta de Google del
+         dueño, y quien manda de verdad son las reglas de Firestore, que
+         corren en los servidores de Google y no se pueden burlar.
+         ============================================================ -->
     <div id="pin-gate-modal" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
       <div class="glass-card w-full max-w-sm rounded-2xl p-6 space-y-4 border border-purple-500/40 text-center shadow-2xl">
         <div class="w-14 h-14 rounded-full bg-purple-600/20 border border-purple-500/40 mx-auto flex items-center justify-center text-purple-400 text-2xl">
           <i class="fa-solid fa-shield-halved"></i>
         </div>
         <div>
-          <h3 class="font-display font-extrabold text-lg text-white">Acceso Administrador</h3>
-          <p class="text-xs text-slate-400">Ingresa el PIN de seguridad (PIN por defecto: 1234)</p>
+          <h3 class="font-display font-extrabold text-lg text-white">Panel de Administración</h3>
+          <p id="admin-gate-text" class="text-xs text-slate-400 mt-1">
+            Entra con la cuenta de Google autorizada de UbaVoy.
+          </p>
+          <p id="admin-gate-email" class="hidden text-[11px] font-mono text-rose-400 bg-rose-950/60 px-3 py-1 rounded-lg border border-rose-800 mt-3"></p>
         </div>
 
-        <form onsubmit="handleVerifyPIN(event)" class="space-y-3">
-          <input type="password" id="admin-pin-input" maxlength="6" required placeholder="PIN de 4 dígitos"
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-center text-xl font-mono text-purple-300 tracking-widest outline-none focus:border-purple-500">
-          <button type="submit" class="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg">
-            Ingresar al Dashboard
-          </button>
-        </form>
+        <button type="button" id="admin-gate-login" onclick="entrarComoAdmin()"
+          class="w-full py-3.5 rounded-xl bg-white hover:bg-slate-100 text-slate-800 font-bold text-sm flex items-center justify-center gap-2.5 shadow-lg transition-all active:scale-95">
+          <i class="fa-brands fa-google text-lg"></i> Entrar con Google
+        </button>
+
+        <button type="button" id="admin-gate-logout" onclick="salirDeAdmin()"
+          class="hidden w-full py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 font-bold text-xs">
+          Cerrar sesión e intentar con otra cuenta
+        </button>
       </div>
     </div>
 
@@ -331,41 +346,88 @@
     let donutChartInstance = null;
     let barChartInstance = null;
 
-    let localUsers = JSON.parse(localStorage.getItem('ubavoy_local_users') || JSON.stringify([
-      { phone: '3109876543', name: 'Carlos Mario (Domiciliario)', email: 'carlos@gmail.com', role: 'driver', is_approved: true, balance: 10000, vehicle: 'Moto Honda 125 - XYZ-12A' },
-      { phone: '3110001122', name: 'Juan Repartidor', email: 'juan@gmail.com', role: 'driver', is_approved: true, balance: 5000, vehicle: 'Moto Yamaha FZ 150 - ABC-99Z' }
-    ]));
+    // La lista de domiciliarios ya no vive en localStorage con datos de
+    // ejemplo: se lee en vivo de Firestore en renderAdminDriversList().
+
+    // Correo del dueño de la plataforma. Debe coincidir con el declarado en
+    // firestore.rules; el navegador solo decide qué se muestra, el permiso
+    // real lo concede Firestore.
+    const CORREO_ADMIN = 'devsites02@gmail.com';
 
     document.addEventListener('DOMContentLoaded', () => {
-      if (isUnlocked) {
-        document.getElementById('pin-gate-modal').classList.add('hidden');
-        document.getElementById('admin-dashboard-content').classList.remove('hidden');
-        initAdminDashboard();
-      }
+      vigilarSesionAdmin();
     });
 
-    function handleVerifyPIN(e) {
-      e.preventDefault();
-      const pin = document.getElementById('admin-pin-input').value.trim();
+    function vigilarSesionAdmin() {
+      if (typeof auth === 'undefined' || !auth) {
+        showToast('Firebase Auth no disponible', 'error');
+        return;
+      }
 
-      if (pin === '1234' || pin === '0000' || pin === '5790') {
-        isUnlocked = true;
-        localStorage.setItem('ubavoy_admin_unlocked', 'true');
-        document.getElementById('pin-gate-modal').classList.add('hidden');
-        document.getElementById('admin-dashboard-content').classList.remove('hidden');
-        initAdminDashboard();
-        showToast('🔓 Acceso Administrador concedido');
-      } else {
-        showToast('❌ PIN Incorrecto. Intenta de nuevo.', 'error');
+      auth.onAuthStateChanged(async (user) => {
+        const puerta = document.getElementById('pin-gate-modal');
+        const panel = document.getElementById('admin-dashboard-content');
+        const texto = document.getElementById('admin-gate-text');
+        const correoEl = document.getElementById('admin-gate-email');
+        const btnEntrar = document.getElementById('admin-gate-login');
+        const btnSalir = document.getElementById('admin-gate-logout');
+
+        if (!user) {
+          panel.classList.add('hidden');
+          puerta.classList.remove('hidden');
+          texto.innerText = 'Entra con la cuenta de Google autorizada de UbaVoy.';
+          correoEl.classList.add('hidden');
+          btnEntrar.classList.remove('hidden');
+          btnSalir.classList.add('hidden');
+          return;
+        }
+
+        const correo = (user.email || '').toLowerCase().trim();
+        const esDueno = correo === CORREO_ADMIN && user.emailVerified === true;
+        let esAdminPorRol = false;
+
+        if (!esDueno) {
+          try {
+            const snap = await db.collection('users').doc(user.uid).get();
+            esAdminPorRol = snap.exists && snap.data().role === 'admin';
+          } catch (e) {
+            esAdminPorRol = false;
+          }
+        }
+
+        if (esDueno || esAdminPorRol) {
+          puerta.classList.add('hidden');
+          panel.classList.remove('hidden');
+          initAdminDashboard();
+          showToast(`Bienvenido, ${user.displayName || correo}`);
+        } else {
+          panel.classList.add('hidden');
+          puerta.classList.remove('hidden');
+          texto.innerText = 'Esta cuenta no tiene permisos de administrador en UbaVoy.';
+          correoEl.innerText = correo;
+          correoEl.classList.remove('hidden');
+          btnEntrar.classList.add('hidden');
+          btnSalir.classList.remove('hidden');
+        }
+      });
+    }
+
+    async function entrarComoAdmin() {
+      try {
+        await auth.signInWithPopup(googleProvider);
+      } catch (err) {
+        console.error('Error entrando como admin:', err);
+        if (err.code === 'auth/popup-closed-by-user') return;
+        showToast('No se pudo iniciar sesión: ' + (err.code || err.message), 'error');
       }
     }
 
+    async function salirDeAdmin() {
+      try { await auth.signOut(); } catch (e) { console.error(e); }
+    }
+
     function lockAdminPIN() {
-      isUnlocked = false;
-      localStorage.removeItem('ubavoy_admin_unlocked');
-      document.getElementById('admin-dashboard-content').classList.add('hidden');
-      document.getElementById('pin-gate-modal').classList.remove('hidden');
-      showToast('🔒 Dashboard bloqueado por seguridad');
+      salirDeAdmin();
     }
 
     function initAdminDashboard() {
@@ -387,32 +449,40 @@
         return;
       }
 
+      // Este formulario creaba un documento con una clave inventada a partir
+      // del correo (carlos_gmail_com). Ese documento nunca coincide con la
+      // cuenta real del domiciliario, que ahora se identifica por el uid de
+      // su cuenta de Google, así que "pre-aprobar" no habilitaba a nadie.
+      //
+      // El flujo correcto es al revés: el domiciliario entra con Google, su
+      // solicitud aparece sola en la lista de abajo, y desde ahí se aprueba.
       try {
-        const driverDoc = {
-          name,
-          email,
-          phone,
-          vehicle,
-          balance: 0,
-          is_approved: true,
-          role: 'driver',
-          created_at: new Date().toISOString()
-        };
+        const solicitudes = await db.collection('users')
+          .where('role', '==', 'driver')
+          .where('email', '==', email)
+          .get();
 
-        if (typeof db !== 'undefined' && db !== null) {
-          const docKey = email.replace(/[^a-zA-Z0-9]/g, '_');
-          await db.collection('users').doc(docKey).set(driverDoc, { merge: true });
+        if (solicitudes.empty) {
+          showToast(`${name} debe entrar primero con ${email} en la app de domiciliario. Ahí aparecerá aquí para aprobarlo.`, 'warning');
+          return;
         }
 
-        localUsers.push(driverDoc);
-        localStorage.setItem('ubavoy_local_users', JSON.stringify(localUsers));
+        const lote = db.batch();
+        solicitudes.forEach(d => {
+          lote.update(d.ref, {
+            is_approved: true,
+            name: name || d.data().name,
+            phone: phone || d.data().phone || '',
+            vehicle: vehicle || d.data().vehicle || ''
+          });
+        });
+        await lote.commit();
 
-        renderAdminDriversList();
         e.target.reset();
-        showToast(`✅ Domiciliario ${name} pre-aprobado exitosamente con correo ${email}`);
+        showToast(`${name} quedó aprobado y ya puede tomar carreras`);
       } catch (err) {
-        console.error("Error pre-aprobando domiciliario:", err);
-        showToast('Error registrando domiciliario', 'error');
+        console.error("Error aprobando domiciliario:", err);
+        showToast('No se pudo aprobar: ' + (err.code || err.message), 'error');
       }
     }
 
@@ -482,31 +552,41 @@
       }).join('');
     }
 
+    /**
+     * Aprueba una recarga y acredita el saldo.
+     *
+     * Antes leía el saldo y luego escribía "saldo + monto" en dos pasos
+     * separados: dos aprobaciones casi simultáneas se pisaban y una recarga
+     * de plata real desaparecía. Ahora ambas escrituras van en un lote y el
+     * saldo se suma con increment(), que resuelve el servidor.
+     */
     async function approveRecharge(rechargeId, driverId, driverEmail, amount) {
+      const monto = Number(amount) || 0;
+      if (monto <= 0) {
+        showToast('El monto de la recarga no es válido', 'error');
+        return;
+      }
+      if (!driverId) {
+        showToast('Esta recarga no tiene domiciliario asociado', 'error');
+        return;
+      }
+
       try {
-        if (typeof db !== 'undefined' && db !== null) {
-          await db.collection('recharges').doc(rechargeId).update({
-            status: 'approved',
-            approved_at: new Date().toISOString()
-          });
+        const lote = db.batch();
+        lote.update(db.collection('recharges').doc(rechargeId), {
+          status: 'approved',
+          approved_at: new Date().toISOString()
+        });
+        lote.update(db.collection('users').doc(driverId), {
+          balance: firebase.firestore.FieldValue.increment(monto),
+          last_recharge_at: new Date().toISOString()
+        });
+        await lote.commit();
 
-          if (driverEmail) {
-            const querySnap = await db.collection('users').where('email', '==', driverEmail).get();
-            if (!querySnap.empty) {
-              querySnap.forEach(async doc => {
-                const currentBal = doc.data().balance || 0;
-                await db.collection('users').doc(doc.id).update({
-                  balance: currentBal + amount
-                });
-              });
-            }
-          }
-        }
-
-        showToast(`🎉 Recarga de $${amount.toLocaleString()} COP aprobada exitosamente`);
+        showToast(`Recarga de $${monto.toLocaleString('es-CO')} acreditada`);
       } catch (err) {
         console.error("Error al aprobar recarga:", err);
-        showToast('Error aprobando la recarga', 'error');
+        showToast('No se pudo aprobar: ' + (err.code || err.message), 'error');
       }
     }
 
@@ -692,49 +772,96 @@
       }).join('');
     }
 
+    // ============================================================
+    // GESTIÓN DE DOMICILIARIOS — CONTRA FIRESTORE REAL
+    // Antes esta lista vivía en localStorage con dos domiciliarios de
+    // ejemplo: aprobar o recargar aquí mostraba un mensaje de éxito pero
+    // NO llegaba a la base de datos ni a la app del domiciliario.
+    // ============================================================
+    let unsubDrivers = null;
+
     function renderAdminDriversList() {
       const feed = document.getElementById('admin-drivers-feed');
       if (!feed) return;
 
-      feed.innerHTML = localUsers.map((driver, index) => {
-        return `
-          <div class="glass-card rounded-2xl p-4 space-y-3 border border-purple-500/20">
-            <div class="flex items-start justify-between">
-              <div>
-                <h4 class="font-bold text-xs text-white">${escapeHtml(driver.name)}</h4>
-                <p class="text-[11px] text-slate-400">${escapeHtml(driver.vehicle)} • WhatsApp: ${driver.phone}</p>
-                <p class="text-[10px] text-purple-300 font-mono">${escapeHtml(driver.email || 'N/A')}</p>
+      if (unsubDrivers) { try { unsubDrivers(); } catch (e) {} }
+
+      unsubDrivers = db.collection('users').where('role', '==', 'driver')
+        .onSnapshot((snap) => {
+          if (snap.empty) {
+            feed.innerHTML = `
+              <div class="glass-card rounded-2xl p-6 text-center text-xs text-slate-400">
+                <i class="fa-solid fa-user-clock text-2xl text-slate-600 mb-2 block"></i>
+                Aún no hay domiciliarios registrados. Aparecerán aquí en cuanto
+                entren con su cuenta de Google en la app de domiciliario.
+              </div>`;
+            return;
+          }
+
+          const filas = [];
+          snap.forEach(d => filas.push({ uid: d.id, ...d.data() }));
+          // Primero los que están esperando aprobación.
+          filas.sort((a, b) => (a.is_approved === true) - (b.is_approved === true));
+
+          feed.innerHTML = filas.map(driver => `
+            <div class="glass-card rounded-2xl p-4 space-y-3 border ${driver.is_approved ? 'border-emerald-500/25' : 'border-amber-500/40'}">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <h4 class="font-bold text-xs text-white truncate">${escapeHtml(driver.name || 'Sin nombre')}</h4>
+                  <p class="text-[11px] text-slate-400 truncate">
+                    ${escapeHtml(driver.vehicle || 'Vehículo sin registrar')}
+                    ${driver.phone ? ' • ' + escapeHtml(driver.phone) : ''}
+                  </p>
+                  <p class="text-[10px] text-purple-300 font-mono truncate">${escapeHtml(driver.email || 'sin correo')}</p>
+                </div>
+                <span class="text-xs font-bold text-emerald-400 shrink-0">$${Number(driver.balance || 0).toLocaleString('es-CO')}</span>
               </div>
-              <span class="text-xs font-bold text-emerald-400">$${(driver.balance || 0).toLocaleString()} COP</span>
-            </div>
 
-            <div class="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
-              <button onclick="toggleDriverApproval(${index})" 
-                class="px-3 py-1.5 rounded-xl font-bold text-[11px] ${driver.is_approved ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}">
-                ${driver.is_approved ? '🟢 Pre-Aprobado' : '🟡 Aprobar Cuenta'}
-              </button>
+              <div class="flex items-center justify-between pt-2 border-t border-slate-800 gap-2">
+                <button onclick="cambiarAprobacion('${driver.uid}', ${driver.is_approved === true})"
+                  class="px-3 py-1.5 rounded-xl font-bold text-[11px] ${driver.is_approved ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}">
+                  ${driver.is_approved ? '🟢 Aprobado (quitar)' : '🟡 Aprobar cuenta'}
+                </button>
 
-              <button onclick="quickRechargeDriver(${index})" class="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] shadow-md">
-                + $5,000 Recarga Directa
-              </button>
+                <button onclick="recargarDomiciliario('${driver.uid}', 5000)"
+                  class="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] shadow-md">
+                  + $5.000
+                </button>
+              </div>
             </div>
-          </div>
-        `;
-      }).join('');
+          `).join('');
+        }, (err) => {
+          console.error('Error leyendo domiciliarios:', err);
+          feed.innerHTML = `
+            <div class="glass-card rounded-2xl p-5 text-center text-xs text-rose-300 border border-rose-800">
+              No se pudo leer la lista de domiciliarios: ${escapeHtml(err.code || err.message)}
+            </div>`;
+        });
     }
 
-    function toggleDriverApproval(index) {
-      localUsers[index].is_approved = !localUsers[index].is_approved;
-      localStorage.setItem('ubavoy_local_users', JSON.stringify(localUsers));
-      renderAdminDriversList();
-      showToast(`Estado de aprobación actualizado para ${localUsers[index].name}`);
+    async function cambiarAprobacion(uid, estabaAprobado) {
+      try {
+        await db.collection('users').doc(uid).update({ is_approved: !estabaAprobado });
+        showToast(!estabaAprobado ? 'Domiciliario aprobado' : 'Aprobación retirada');
+      } catch (e) {
+        console.error('Error cambiando aprobación:', e);
+        showToast('No se pudo actualizar: ' + (e.code || e.message), 'error');
+      }
     }
 
-    function quickRechargeDriver(index) {
-      localUsers[index].balance = (localUsers[index].balance || 0) + 5000;
-      localStorage.setItem('ubavoy_local_users', JSON.stringify(localUsers));
-      renderAdminDriversList();
-      showToast(`⚡ Recarga de $5,000 COP acreditada a ${localUsers[index].name}`);
+    async function recargarDomiciliario(uid, monto) {
+      try {
+        // increment() lo resuelve el servidor: dos recargas simultáneas se
+        // suman en vez de pisarse, que era el riesgo de leer y luego escribir.
+        await db.collection('users').doc(uid).update({
+          balance: firebase.firestore.FieldValue.increment(monto),
+          last_recharge_at: new Date().toISOString()
+        });
+        showToast(`Acreditados $${monto.toLocaleString('es-CO')}`);
+      } catch (e) {
+        console.error('Error recargando:', e);
+        showToast('No se pudo recargar: ' + (e.code || e.message), 'error');
+      }
     }
 
     function showToast(message, type = 'success') {

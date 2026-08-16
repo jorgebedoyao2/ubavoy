@@ -140,6 +140,26 @@ await check('Cliente NO puede leer el pedido de otro cliente', () =>
 await check('Nadie puede borrar un pedido (historial contable)', () =>
   assertFails(updateDoc(doc(cliente1, 'orders/pedidoTomado'), { status: 'cancelled' })));
 
+console.log('\n=== 3b. Arranque del administrador por correo ===');
+const dueno = testEnv.authenticatedContext('uidJorge', {
+  email: 'devsites02@gmail.com', email_verified: true,
+}).firestore();
+const duenoSinVerificar = testEnv.authenticatedContext('uidFalso', {
+  email: 'devsites02@gmail.com', email_verified: false,
+}).firestore();
+const impostor = testEnv.authenticatedContext('uidMalo', {
+  email: 'otro@gmail.com', email_verified: true,
+}).firestore();
+
+await check('El dueño manda aunque NO tenga documento en users', () =>
+  assertSucceeds(getDocs(collection(dueno, 'orders'))));
+await check('El dueño SÍ puede aprobar domiciliarios de entrada', () =>
+  assertSucceeds(updateDoc(doc(dueno, 'users/driverNoAprob'), { is_approved: true })));
+await check('Correo del dueño SIN verificar NO da acceso', () =>
+  assertFails(getDocs(collection(duenoSinVerificar, 'users'))));
+await check('Otro correo cualquiera NO es admin', () =>
+  assertFails(getDocs(collection(impostor, 'users'))));
+
 console.log('\n=== 6b. Ubicación en vivo y novedades ===');
 await check('Domiciliario asignado SÍ puede compartir su ubicación', () =>
   assertSucceeds(updateDoc(doc(driverOK, 'orders/pedidoTomado'), {
