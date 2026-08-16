@@ -22,9 +22,13 @@
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <!-- Leaflet.js Maps CSS & JS -->
+  <!-- Leaflet.js Maps CSS & JS (mapa de selección de dirección) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- MapLibre GL: mapa vectorial del rastreo en vivo, igual al del domiciliario -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -108,6 +112,16 @@
       background: #090d16 !important;
       font-family: 'Inter', sans-serif;
     }
+    /* La atribución por defecto de MapLibre es tan grande en pantallas
+       angostas que tapaba el marcador de la casa. Se reduce y se aclara. */
+    #client-tracking-map .maplibregl-ctrl-attrib {
+      font-size: 8px;
+      line-height: 1.25;
+      background: rgba(2, 6, 23, 0.55);
+      max-width: 62%;
+    }
+    #client-tracking-map .maplibregl-ctrl-attrib a { color: #64748b; }
+    #client-tracking-map .maplibregl-ctrl-bottom-right { transform: scale(0.85); transform-origin: bottom right; }
   </style>
 </head>
 <body class="h-full bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-brand-500 selection:text-slate-950">
@@ -268,6 +282,31 @@
             <span class="text-slate-500">Hash SHA-256:</span>
             <span id="activeOrderHashDisplay" class="font-mono text-purple-300 truncate max-w-[150px]">SEC-ORDER-SHA256</span>
           </div>
+        </div>
+
+        <!-- ============ NOVEDAD REPORTADA POR EL DOMICILIARIO ============ -->
+        <div id="client-novedad-box" class="hidden bg-amber-950/80 border border-amber-600 rounded-xl p-3">
+          <p class="text-[10px] uppercase tracking-wide text-amber-500 font-bold mb-1">
+            <i class="fa-solid fa-bullhorn mr-1"></i> Aviso de tu domiciliario
+          </p>
+          <p id="client-novedad-text" class="text-xs text-amber-100 leading-snug"></p>
+          <p id="client-novedad-time" class="text-[10px] text-amber-500/80 mt-1"></p>
+        </div>
+
+        <!-- ============ MAPA EN VIVO: ¿POR DÓNDE VIENE? ============ -->
+        <div id="client-tracking-map-wrap" class="hidden space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+              <i class="fa-solid fa-route text-emerald-400"></i> Por dónde viene tu domiciliario
+            </span>
+            <span id="client-eta-badge" class="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800">
+              Esperando ubicación...
+            </span>
+          </div>
+          <div id="client-tracking-map" class="w-full h-52 rounded-xl overflow-hidden border border-slate-700 bg-slate-900"></div>
+          <p id="client-tracking-hint" class="text-[10px] text-slate-500 text-center">
+            El domiciliario comparte su ubicación mientras va en camino.
+          </p>
         </div>
 
         <!-- MOSTRAR PIN DE SEGURIDAD 4 DÍGITOS PARA ENTREGAR -->
@@ -455,6 +494,151 @@
       } else {
         showToast("Geolocalización no disponible", "warning");
       }
+    }
+
+    // ============ RASTREO EN VIVO DEL DOMICILIARIO (MapLibre) ============
+    let mapaRastreo = null;
+    let marcadorDriverCliente = null;
+    let marcadorDestinoCliente = null;
+    let ultimaPosDriver = null;
+
+    /**
+     * Dibuja en el mapa por dónde viene el domiciliario. Se alimenta del
+     * campo driver_coords que la app del domiciliario va actualizando.
+     */
+    function actualizarMapaRastreo(order) {
+      const caja = document.getElementById('client-tracking-map-wrap');
+      const badge = document.getElementById('client-eta-badge');
+      const hint = document.getElementById('client-tracking-hint');
+      if (!caja) return;
+
+      const estado = (order.status || '').toLowerCase();
+      const enCamino = ['assigned', 'in_transit', 'picked_up'].includes(estado);
+      const dc = order.driver_coords;
+      const hayPosDriver = dc && typeof dc.lat === 'number' && typeof dc.lng === 'number';
+
+      // Sin domiciliario asignado todavía no tiene sentido mostrar el mapa.
+      if (!enCamino) {
+        caja.classList.add('hidden');
+        return;
+      }
+      caja.classList.remove('hidden');
+
+      if (typeof maplibregl === 'undefined') return;
+
+      const destino = order.delivery_coords || UBATE_CENTER;
+
+      if (!mapaRastreo) {
+        mapaRastreo = new maplibregl.Map({
+          container: 'client-tracking-map',
+          style: 'https://tiles.openfreemap.org/styles/dark',
+          center: [destino.lng, destino.lat],
+          zoom: 14,
+          attributionControl: { compact: true }
+        });
+
+        mapaRastreo.on('load', () => {
+          mapaRastreo.resize();
+
+          const elCasa = document.createElement('div');
+          elCasa.innerHTML =
+            '<div style="width:28px;height:28px;border-radius:50%;background:#10b981;border:3px solid #ecfdf5;' +
+            'display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px rgba(16,185,129,.9)">' +
+            '<i class="fa-solid fa-house" style="color:#022c22;font-size:11px"></i></div>';
+          marcadorDestinoCliente = new maplibregl.Marker({ element: elCasa })
+            .setLngLat([destino.lng, destino.lat]).addTo(mapaRastreo);
+
+          mapaRastreo.addSource('recorrido', {
+            type: 'geojson',
+            data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+          });
+          mapaRastreo.addLayer({
+            id: 'recorrido-linea', type: 'line', source: 'recorrido',
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#f59e0b', 'line-width': 4, 'line-opacity': 0.9 }
+          });
+
+          if (ultimaPosDriver) pintarDriverEnMapaCliente(destino);
+        });
+      }
+
+      if (hayPosDriver) {
+        ultimaPosDriver = { lat: dc.lat, lng: dc.lng };
+        pintarDriverEnMapaCliente(destino);
+
+        const dist = distanciaEnMetros(ultimaPosDriver, destino);
+        const minutos = Math.max(1, Math.round(dist / 250));
+        if (badge) {
+          badge.innerText = dist < 120
+            ? '¡Ya casi llega!'
+            : `A ${dist < 1000 ? Math.round(dist) + ' m' : (dist/1000).toFixed(1) + ' km'} · ~${minutos} min`;
+        }
+        if (hint) hint.innerText = 'Ubicación actualizada en tiempo real.';
+      } else {
+        if (badge) badge.innerText = 'Esperando ubicación...';
+        if (hint) hint.innerText = 'Tu domiciliario aún no ha compartido su ubicación.';
+      }
+    }
+
+    function pintarDriverEnMapaCliente(destino) {
+      if (!mapaRastreo || !ultimaPosDriver || !mapaRastreo.isStyleLoaded()) {
+        if (mapaRastreo && ultimaPosDriver) {
+          mapaRastreo.once('idle', () => pintarDriverEnMapaCliente(destino));
+        }
+        return;
+      }
+
+      if (!marcadorDriverCliente) {
+        const el = document.createElement('div');
+        el.innerHTML =
+          '<div style="width:30px;height:30px;border-radius:50%;background:#f59e0b;border:3px solid #fff;' +
+          'display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px rgba(245,158,11,.95)">' +
+          '<i class="fa-solid fa-motorcycle" style="color:#1c1917;font-size:12px"></i></div>';
+        marcadorDriverCliente = new maplibregl.Marker({ element: el })
+          .setLngLat([ultimaPosDriver.lng, ultimaPosDriver.lat]).addTo(mapaRastreo);
+      } else {
+        marcadorDriverCliente.setLngLat([ultimaPosDriver.lng, ultimaPosDriver.lat]);
+      }
+
+      // Línea del recorrido pendiente hasta la casa.
+      const src = mapaRastreo.getSource('recorrido');
+      if (src) {
+        src.setData({
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [ultimaPosDriver.lng, ultimaPosDriver.lat],
+              [destino.lng, destino.lat]
+            ]
+          }
+        });
+      }
+
+      const b = new maplibregl.LngLatBounds();
+      b.extend([ultimaPosDriver.lng, ultimaPosDriver.lat]);
+      b.extend([destino.lng, destino.lat]);
+      mapaRastreo.fitBounds(b, { padding: 45, maxZoom: 16, duration: 600 });
+    }
+
+    /** Muestra la novedad que haya reportado el domiciliario. */
+    function mostrarNovedadCliente(order) {
+      const caja = document.getElementById('client-novedad-box');
+      const txt = document.getElementById('client-novedad-text');
+      const hora = document.getElementById('client-novedad-time');
+      if (!caja || !txt) return;
+
+      if (!order.driver_novedad) {
+        caja.classList.add('hidden');
+        return;
+      }
+      txt.innerText = order.driver_novedad;
+      if (hora && order.driver_novedad_at) {
+        const d = new Date(order.driver_novedad_at);
+        hora.innerText = isNaN(d.getTime()) ? '' :
+          'Reportado a las ' + d.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
+      }
+      caja.classList.remove('hidden');
     }
 
     /** Distancia en metros entre dos coordenadas (fórmula de Haversine). */
@@ -685,6 +869,14 @@
         }
 
         updateStatusBadge(order.status, order);
+
+        // Mapa en vivo con la posición del domiciliario y avisos que reporte.
+        try {
+          actualizarMapaRastreo(order);
+          mostrarNovedadCliente(order);
+        } catch (errMapa) {
+          console.error('Fallo pintando el rastreo en vivo:', errMapa);
+        }
       });
     }
 

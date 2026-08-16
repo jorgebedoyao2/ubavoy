@@ -387,6 +387,50 @@
     </div>
 
     <!-- MODAL SELECCIÓN GPS NAVEGACIÓN -->
+    <!-- ============ REPORTAR NOVEDAD AL CLIENTE ============ -->
+    <div id="novedad-modal" class="hidden fixed inset-0 z-[60] bg-slate-950/90 backdrop-blur-sm items-center justify-center p-4">
+      <div class="glass-card w-full max-w-sm rounded-2xl p-5 space-y-4 border border-amber-500/50 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+          <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+            <i class="fa-solid fa-bullhorn text-amber-400"></i> Avisar una novedad
+          </h3>
+          <button type="button" onclick="cerrarNovedadModal()" class="text-slate-400 hover:text-white">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <p class="text-[11px] text-slate-400">El cliente verá este aviso en su pantalla de rastreo.</p>
+
+        <div class="grid grid-cols-1 gap-1.5">
+          <button type="button" onclick="elegirNovedadRapida('Voy en camino, me demoro unos minutos más por el tráfico.')"
+            class="text-left text-[11px] px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:border-amber-500/50">
+            🕒 Me demoro unos minutos más
+          </button>
+          <button type="button" onclick="elegirNovedadRapida('El local no tenía lo que pediste. ¿Quieres que lleve algo similar?')"
+            class="text-left text-[11px] px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:border-amber-500/50">
+            🛒 No había el producto
+          </button>
+          <button type="button" onclick="elegirNovedadRapida('Ya estoy en la dirección pero no encuentro la casa. Por favor sal o indícame.')"
+            class="text-left text-[11px] px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:border-amber-500/50">
+            📍 No encuentro la dirección
+          </button>
+          <button type="button" onclick="elegirNovedadRapida('Ya llegué, te espero en la puerta.')"
+            class="text-left text-[11px] px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:border-amber-500/50">
+            🔔 Ya llegué
+          </button>
+        </div>
+
+        <textarea id="novedad-texto" rows="3" maxlength="280"
+          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-600 focus:border-amber-500 focus:outline-none"
+          placeholder="O escribe tu propio mensaje..."></textarea>
+
+        <button type="button" id="novedad-enviar-btn" onclick="enviarNovedad()"
+          class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition-all active:scale-95">
+          Enviar aviso al cliente
+        </button>
+      </div>
+    </div>
+
     <!-- ================= MAPA DE NAVEGACIÓN A LA ENTREGA ================= -->
     <div id="gps-nav-modal" class="hidden fixed inset-0 z-50 bg-slate-950 flex-col">
 
@@ -1197,6 +1241,7 @@
           }
           pintarPosicionDriver();
           actualizarRuta();
+          compartirUbicacionConCliente(navPosDriver, precision);
         },
         (err) => {
           if (txt) {
@@ -1214,6 +1259,88 @@
       if (navWatchId !== null) {
         navigator.geolocation.clearWatch(navWatchId);
         navWatchId = null;
+      }
+    }
+
+    // ---- Compartir ubicación con el cliente ----
+    // El GPS dispara muchas veces por minuto. Escribir cada una gastaria la
+    // cuota gratuita de Firestore muy rapido, asi que solo se guarda si
+    // pasaron 15 s o si el domiciliario se movio mas de 40 m.
+    let ultimoEnvioUbicacion = 0;
+    let ultimaUbicacionEnviada = null;
+    let pedidoEnCurso = null;   // id del pedido que se esta entregando
+
+    async function compartirUbicacionConCliente(pos, precision) {
+      if (!pedidoEnCurso || !pos) return;
+
+      const ahora = Date.now();
+      const movio = ultimaUbicacionEnviada ? distanciaMetros(ultimaUbicacionEnviada, pos) : Infinity;
+      if (ahora - ultimoEnvioUbicacion < 15000 && movio < 40) return;
+
+      ultimoEnvioUbicacion = ahora;
+      ultimaUbicacionEnviada = pos;
+
+      try {
+        const targetDb = (typeof db !== 'undefined' && db) ? db : window.db;
+        await targetDb.collection('orders').doc(pedidoEnCurso).update({
+          driver_coords: { lat: pos.lat, lng: pos.lng, accuracy: precision || 0 },
+          driver_coords_at: new Date().toISOString()
+        });
+      } catch (e) {
+        console.warn('No se pudo compartir la ubicación con el cliente:', e.code || e.message);
+      }
+    }
+
+    // ---- Reportar una novedad al cliente ----
+    function abrirNovedadModal(orderId) {
+      pedidoEnCurso = orderId || pedidoEnCurso;
+      const m = document.getElementById('novedad-modal');
+      if (m) {
+        document.getElementById('novedad-texto').value = '';
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+    }
+
+    function cerrarNovedadModal() {
+      const m = document.getElementById('novedad-modal');
+      if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+    }
+
+    function elegirNovedadRapida(texto) {
+      const campo = document.getElementById('novedad-texto');
+      if (campo) campo.value = texto;
+    }
+
+    async function enviarNovedad() {
+      const campo = document.getElementById('novedad-texto');
+      const texto = (campo && campo.value || '').trim();
+
+      if (!texto) {
+        showToast('Escribe o elige la novedad que quieres avisar', 'error');
+        return;
+      }
+      if (!pedidoEnCurso) {
+        showToast('No hay una carrera activa para reportar', 'error');
+        return;
+      }
+
+      const boton = document.getElementById('novedad-enviar-btn');
+      if (boton) { boton.disabled = true; boton.innerText = 'Enviando...'; }
+
+      try {
+        const targetDb = (typeof db !== 'undefined' && db) ? db : window.db;
+        await targetDb.collection('orders').doc(pedidoEnCurso).update({
+          driver_novedad: texto.slice(0, 280),
+          driver_novedad_at: new Date().toISOString()
+        });
+        showToast('El cliente ya puede ver tu aviso', 'success');
+        cerrarNovedadModal();
+      } catch (e) {
+        console.error('Error enviando novedad:', e);
+        showToast('No se pudo enviar el aviso: ' + (e.code || e.message), 'error');
+      } finally {
+        if (boton) { boton.disabled = false; boton.innerText = 'Enviar aviso al cliente'; }
       }
     }
 
@@ -1488,6 +1615,10 @@
       }
 
       section.classList.remove('hidden');
+
+      // La carrera activa es la que recibe la ubicación en vivo y las novedades.
+      pedidoEnCurso = orders[0] ? orders[0].id : null;
+
       feed.innerHTML = orders.map(order => {
         const coords = order.delivery_coords || order.destinationCoords || { lat: UBATE_CENTER.lat, lng: UBATE_CENTER.lng };
         const desc = order.task_description || order.description || 'Mandado UbaVoy';
@@ -1527,6 +1658,11 @@
                 <i class="fa-brands fa-whatsapp"></i> 💬 WhatsApp Cliente
               </a>
             </div>
+
+            <button type="button" onclick="abrirNovedadModal('${order.id}')"
+              class="w-full py-2 rounded-xl bg-amber-950 hover:bg-amber-900 border border-amber-700 text-amber-300 font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all">
+              <i class="fa-solid fa-bullhorn"></i> Avisar novedad al cliente
+            </button>
 
             <!-- MÓDULO DE VERIFICACIÓN DE PIN DE ENTREGA -->
             <div class="bg-slate-950 border border-amber-500/40 rounded-xl p-3 space-y-2">

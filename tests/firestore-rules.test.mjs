@@ -140,6 +140,29 @@ await check('Cliente NO puede leer el pedido de otro cliente', () =>
 await check('Nadie puede borrar un pedido (historial contable)', () =>
   assertFails(updateDoc(doc(cliente1, 'orders/pedidoTomado'), { status: 'cancelled' })));
 
+console.log('\n=== 6b. Ubicación en vivo y novedades ===');
+await check('Domiciliario asignado SÍ puede compartir su ubicación', () =>
+  assertSucceeds(updateDoc(doc(driverOK, 'orders/pedidoTomado'), {
+    driver_coords: { lat: 5.31, lng: -73.82, accuracy: 12 },
+    driver_coords_at: '2026-08-15T13:00:00Z',
+  })));
+await check('Domiciliario asignado SÍ puede avisar una novedad', () =>
+  assertSucceeds(updateDoc(doc(driverOK, 'orders/pedidoTomado'), {
+    driver_novedad: 'Me demoro 5 minutos', driver_novedad_at: '2026-08-15T13:01:00Z',
+  })));
+await check('Otro domiciliario NO puede falsear la ubicación de esa carrera', () =>
+  assertFails(updateDoc(doc(driverPobre, 'orders/pedidoTomado'), {
+    driver_coords: { lat: 0, lng: 0 },
+  })));
+await check('Domiciliario NO puede subirse el precio con la novedad', () =>
+  assertFails(updateDoc(doc(driverOK, 'orders/pedidoTomado'), {
+    driver_novedad: 'ok', estimated_price: 90000,
+  })));
+await check('Domiciliario NO puede cambiar el PIN de entrega', () =>
+  assertFails(updateDoc(doc(driverOK, 'orders/pedidoTomado'), { delivery_pin: '0000' })));
+await check('Cliente SÍ puede leer la ubicación de su domiciliario', () =>
+  assertSucceeds(getDoc(doc(cliente1, 'orders/pedidoTomado'))));
+
 console.log('\n=== 6. Recargas de saldo ===');
 await check('Domiciliario NO puede crear una recarga ya aprobada', () =>
   assertFails(setDoc(doc(driverOK, 'recharges/r1'), {

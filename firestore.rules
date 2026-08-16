@@ -168,11 +168,22 @@ service cloud.firestore {
                && request.resource.data.estimated_price == resource.data.estimated_price;
       }
 
-      // El domiciliario asignado mueve el pedido por sus estados.
+      // El domiciliario asignado mueve el pedido por sus estados, comparte su
+      // ubicación en vivo y puede avisarle novedades al cliente. No puede
+      // tocar el precio, el PIN ni el dueño del pedido.
       function avanzaSuCarrera() {
         return soyElAsignado()
-               && request.resource.data.status in ['picked_up', 'delivered']
-               && soloCambia(['status', 'updated_at', 'delivered_at', 'picked_up_at', 'driver_coords']);
+               && soloCambia([
+                    'status', 'updated_at', 'delivered_at', 'picked_up_at',
+                    'completed_at', 'driver_coords', 'driver_coords_at',
+                    'driver_novedad', 'driver_novedad_at'
+                  ])
+               && (
+                    // O bien no cambia el estado (solo ubicación / novedad),
+                    !('status' in request.resource.data.diff(resource.data).affectedKeys())
+                    // o lo mueve a un estado válido de avance.
+                    || request.resource.data.status in ['picked_up', 'in_transit', 'delivered', 'completed']
+                  );
       }
 
       // El cliente puede cancelar mientras nadie la haya tomado.
