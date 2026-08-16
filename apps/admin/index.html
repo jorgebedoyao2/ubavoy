@@ -137,6 +137,19 @@
       </div>
     </div>
 
+    <!-- VISOR DEL COMPROBANTE A PANTALLA COMPLETA -->
+    <div id="visor-comprobante" class="hidden fixed inset-0 z-[70] bg-slate-950/95 backdrop-blur-sm items-center justify-center p-4"
+         onclick="cerrarVisorComprobante()">
+      <div class="w-full max-w-lg">
+        <img id="visor-comprobante-img" alt="Comprobante de pago ampliado"
+          class="w-full max-h-[80vh] object-contain rounded-xl border border-slate-700 bg-slate-900">
+        <button type="button" onclick="cerrarVisorComprobante()"
+          class="w-full mt-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 font-bold text-xs">
+          Cerrar
+        </button>
+      </div>
+    </div>
+
     <!-- MAIN CONTENT DASHBOARD ADMIN -->
     <main id="admin-dashboard-content" class="hidden flex-1 px-4 py-4 space-y-5">
 
@@ -173,7 +186,7 @@
           <div class="glass-card rounded-2xl p-3.5 border border-sky-500/30 space-y-1 shadow-lg bg-slate-900/90">
             <span class="text-[10px] text-slate-400 font-semibold block uppercase">Comisiones UbaVoy</span>
             <p id="kpi-commissions" class="font-display font-black text-xl text-sky-400">$0 COP</p>
-            <span class="text-[9px] text-sky-300">$500 COP por carrera</span>
+            <span class="text-[9px] text-sky-300">$1.000 COP por carrera</span>
           </div>
         </div>
       </div>
@@ -675,11 +688,28 @@
 
             <div class="text-xs text-slate-300 space-y-1">
               <p><strong>Paquete:</strong> ${escapeHtml(r.package_name || 'Personalizado')}</p>
-              <p><strong>Comprobante / Ref:</strong> <span class="font-mono text-amber-300">${escapeHtml(r.receipt_url || 'N/A')}</span></p>
+              <p><strong>Referencia:</strong>
+                <span class="font-mono text-amber-300">${escapeHtml(r.receipt_ref || r.receipt_url || 'sin referencia')}</span>
+              </p>
+              <p class="text-[10px] text-slate-500">Solicitada: ${escapeHtml(fechaLegibleAdmin(r.created_at))}</p>
             </div>
 
+            ${r.receipt_image ? `
+              <div>
+                <p class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Comprobante del pago</p>
+                <img src="${r.receipt_image}" alt="Comprobante de pago"
+                  onclick="verComprobanteGrande('${r.id}')"
+                  class="w-full max-h-56 object-contain rounded-xl border border-slate-700 bg-slate-950 cursor-zoom-in">
+                <p class="text-[10px] text-slate-500 text-center mt-1">Toca la imagen para verla en grande</p>
+              </div>
+            ` : `
+              <p class="text-[11px] text-amber-300 bg-amber-950/60 border border-amber-800 rounded-lg px-2 py-1.5">
+                Esta solicitud no trae captura del pago. Verifícala directamente en tu Nequi antes de aprobar.
+              </p>
+            `}
+
             <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800">
-              <button onclick="approveRecharge('${r.id}', '${r.driver_id}', '${r.driver_email}', ${r.amount})"
+              <button onclick="approveRecharge('${r.id}', '${r.driver_id}', '${r.driver_email}', ${r.amount}, ${r.servicios || 0})"
                 class="py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-1">
                 <i class="fa-solid fa-check"></i> Aprobar Recarga
               </button>
@@ -702,7 +732,37 @@
      * de plata real desaparecía. Ahora ambas escrituras van en un lote y el
      * saldo se suma con increment(), que resuelve el servidor.
      */
-    async function approveRecharge(rechargeId, driverId, driverEmail, amount) {
+    const COSTO_CARRERA_ADMIN = 1000;  // debe coincidir con la app y las reglas
+
+    function fechaLegibleAdmin(iso) {
+      if (!iso) return 'sin fecha';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return 'sin fecha';
+      return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) +
+             ', ' + d.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
+    }
+
+    /** Abre el comprobante a pantalla completa para poder leerlo bien. */
+    async function verComprobanteGrande(rechargeId) {
+      try {
+        const snap = await db.collection('recharges').doc(rechargeId).get();
+        if (!snap.exists || !snap.data().receipt_image) return;
+        const visor = document.getElementById('visor-comprobante');
+        document.getElementById('visor-comprobante-img').src = snap.data().receipt_image;
+        visor.classList.remove('hidden');
+        visor.classList.add('flex');
+      } catch (e) {
+        showToast('No se pudo abrir el comprobante', 'error');
+      }
+    }
+
+    function cerrarVisorComprobante() {
+      const visor = document.getElementById('visor-comprobante');
+      visor.classList.add('hidden');
+      visor.classList.remove('flex');
+    }
+
+    async function approveRecharge(rechargeId, driverId, driverEmail, amount, servicios) {
       const monto = Number(amount) || 0;
       if (monto <= 0) {
         showToast('El monto de la recarga no es válido', 'error');
@@ -713,6 +773,8 @@
         return;
       }
 
+      const cantidadServicios = Number(servicios) || Math.floor(monto / COSTO_CARRERA_ADMIN);
+
       try {
         const lote = db.batch();
         lote.update(db.collection('recharges').doc(rechargeId), {
@@ -721,11 +783,13 @@
         });
         lote.update(db.collection('users').doc(driverId), {
           balance: firebase.firestore.FieldValue.increment(monto),
+          // Sirve para la barra de consumo en la app del domiciliario.
+          ultimo_paquete_servicios: cantidadServicios,
           last_recharge_at: new Date().toISOString()
         });
         await lote.commit();
 
-        showToast(`Recarga de $${monto.toLocaleString('es-CO')} acreditada`);
+        showToast(`Acreditados ${cantidadServicios} domicilios ($${monto.toLocaleString('es-CO')})`);
       } catch (err) {
         console.error("Error al aprobar recarga:", err);
         showToast('No se pudo aprobar: ' + (err.code || err.message), 'error');

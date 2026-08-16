@@ -224,15 +224,35 @@
           </button>
         </div>
 
-        <div class="flex items-center justify-between border-t border-slate-800/80 pt-3">
-          <div>
-            <span class="text-[10px] text-slate-400 font-semibold block uppercase">Saldo Prepago</span>
-            <span id="driver-balance-display" class="font-display font-black text-lg text-emerald-400">$10,000 COP</span>
+        <!-- ============ SALDO Y DOMICILIOS DISPONIBLES ============ -->
+        <div class="border-t border-slate-800/80 pt-3 space-y-3">
+          <div class="flex items-end justify-between gap-3">
+            <div>
+              <span class="text-[10px] text-slate-400 font-semibold block uppercase">Te quedan</span>
+              <div class="flex items-baseline gap-1.5">
+                <span id="driver-servicios-restantes" class="font-display font-black text-3xl text-emerald-400 leading-none">0</span>
+                <span id="driver-servicios-palabra" class="text-xs font-bold text-slate-300">domicilios</span>
+              </div>
+              <span id="driver-balance-display" class="text-[11px] text-slate-500 block mt-0.5">$0 COP de saldo</span>
+            </div>
+
+            <button onclick="openRechargeModal()" class="shrink-0 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all">
+              <i class="fa-solid fa-wallet"></i> Recargar
+            </button>
           </div>
 
-          <button onclick="openRechargeModal()" class="py-1.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all">
-            <i class="fa-solid fa-wallet"></i> Recargar Nequi / Daviplata
-          </button>
+          <!-- Barra de consumo del paquete -->
+          <div>
+            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div id="driver-consumo-barra" class="h-full bg-emerald-500 transition-all duration-500" style="width:0%"></div>
+            </div>
+            <p id="driver-consumo-texto" class="text-[10px] text-slate-500 mt-1.5"></p>
+          </div>
+
+          <!-- Aviso cuando se está agotando -->
+          <div id="driver-aviso-saldo" class="hidden rounded-xl px-3 py-2 border">
+            <p id="driver-aviso-texto" class="text-[11px] font-semibold leading-snug"></p>
+          </div>
         </div>
 
         <div class="flex items-center justify-between">
@@ -400,10 +420,37 @@
             <p class="text-slate-400"><strong>Titular:</strong> Central UbaVoy Ubaté</p>
           </div>
 
-          <div>
-            <label class="block font-semibold text-slate-200 mb-1">Captura de Comprobante / URL:</label>
-            <input type="text" id="recharge-receipt-url" placeholder="Ej: https://imgur.com/x o Número Nequi Ref"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-amber-500">
+          <!-- ============ CAPTURA DEL COMPROBANTE ============ -->
+          <div class="space-y-2">
+            <label class="block font-semibold text-slate-200">Captura del pago (obligatoria)</label>
+            <p class="text-[10px] text-slate-500 leading-snug">
+              Toma o adjunta la pantalla donde se ve el valor, la fecha y el número de referencia.
+            </p>
+
+            <input type="file" id="recharge-receipt-file" accept="image/*" capture="environment" class="hidden"
+              onchange="procesarCapturaComprobante(this)">
+
+            <button type="button" onclick="document.getElementById('recharge-receipt-file').click()"
+              class="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border-2 border-dashed border-slate-600 hover:border-amber-500 text-slate-300 font-bold text-xs flex items-center justify-center gap-2 transition-all">
+              <i class="fa-solid fa-camera text-base"></i>
+              <span id="recharge-file-label">Adjuntar captura del comprobante</span>
+            </button>
+
+            <div id="recharge-preview-wrap" class="hidden relative">
+              <img id="recharge-preview" alt="Vista previa del comprobante"
+                class="w-full max-h-52 object-contain rounded-xl border border-slate-700 bg-slate-950">
+              <button type="button" onclick="quitarCapturaComprobante()"
+                class="absolute top-2 right-2 w-7 h-7 rounded-full bg-slate-950/90 border border-slate-600 text-slate-300 text-xs">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+              <p id="recharge-preview-info" class="text-[10px] text-emerald-400 mt-1 text-center"></p>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Referencia del pago (opcional)</label>
+              <input type="text" id="recharge-receipt-url" placeholder="Ej: Nequi 1234"
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-amber-500">
+            </div>
           </div>
 
           <button type="submit" class="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md">
@@ -673,6 +720,7 @@
             isAvailable = true;
             updateAvailabilityUI();
             startDriverFirestoreRealtime();
+            escucharMiPerfil(user.uid);
             refrescarPuertaDeAudio();
           } else {
             detenerCanalDeCarreras();
@@ -723,8 +771,39 @@
         vehicle: data.vehicle || '',
         role: data.role || 'driver',
         is_approved: data.is_approved === true,
-        balance: Number(data.balance) || 0
+        balance: Number(data.balance) || 0,
+        // Cuántos domicilios traía el último paquete aprobado, para poder
+        // mostrar la barra de "usados de comprados".
+        ultimo_paquete_servicios: Number(data.ultimo_paquete_servicios) || 0
       };
+    }
+
+    /**
+     * Mantiene el saldo del domiciliario sincronizado en vivo. Sin esto, el
+     * contador solo se actualizaría al recargar la página, y el domiciliario
+     * no vería llegar la recarga que el administrador acaba de aprobar.
+     */
+    let unsubPerfil = null;
+    function escucharMiPerfil(uid) {
+      if (unsubPerfil) { try { unsubPerfil(); } catch (e) {} }
+      const targetDb = (typeof db !== 'undefined' && db) ? db : window.db;
+
+      unsubPerfil = targetDb.collection('users').doc(uid).onSnapshot((snap) => {
+        if (!snap.exists) return;
+        const d = snap.data();
+        const saldoAnterior = currentDriver.balance;
+        currentDriver.balance = Number(d.balance) || 0;
+        currentDriver.ultimo_paquete_servicios = Number(d.ultimo_paquete_servicios) || 0;
+        currentDriver.name = d.name || currentDriver.name;
+        currentDriver.phone = d.phone || currentDriver.phone;
+        currentDriver.vehicle = d.vehicle || currentDriver.vehicle;
+        pintarConsumoDePaquete();
+
+        if (currentDriver.balance > saldoAnterior) {
+          const sumados = Math.floor((currentDriver.balance - saldoAnterior) / COSTO_CARRERA);
+          showToast(`¡Recarga aprobada! Sumaste ${sumados} domicilios.`);
+        }
+      }, (err) => console.warn('No se pudo escuchar el perfil:', err.code || err.message));
     }
 
     /**
@@ -1113,6 +1192,66 @@
       if (modal) modal.classList.add('hidden');
     }
 
+    /**
+     * Traduce el saldo en pesos a algo que el domiciliario entiende de una
+     * mirada: cuántos domicilios más puede tomar antes de quedarse sin cupo.
+     */
+    function pintarConsumoDePaquete() {
+      const saldo = Number(currentDriver.balance) || 0;
+      const restantes = Math.floor(saldo / COSTO_CARRERA);
+      const comprados = Number(currentDriver.ultimo_paquete_servicios) || 0;
+
+      const elNum = document.getElementById('driver-servicios-restantes');
+      const elPalabra = document.getElementById('driver-servicios-palabra');
+      const elSaldo = document.getElementById('driver-balance-display');
+      const barra = document.getElementById('driver-consumo-barra');
+      const texto = document.getElementById('driver-consumo-texto');
+      const aviso = document.getElementById('driver-aviso-saldo');
+      const avisoTxt = document.getElementById('driver-aviso-texto');
+      if (!elNum) return;
+
+      elNum.innerText = restantes;
+      if (elPalabra) elPalabra.innerText = restantes === 1 ? 'domicilio' : 'domicilios';
+      if (elSaldo) elSaldo.innerText = `$${saldo.toLocaleString('es-CO')} COP de saldo`;
+
+      // Color del número según qué tan justo va.
+      elNum.className = 'font-display font-black text-3xl leading-none ' +
+        (restantes === 0 ? 'text-rose-400' : restantes <= 3 ? 'text-amber-400' : 'text-emerald-400');
+
+      // Barra: cuánto queda del último paquete comprado.
+      if (barra && texto) {
+        if (comprados > 0) {
+          const usados = Math.max(0, comprados - restantes);
+          const pct = Math.max(0, Math.min(100, (restantes / comprados) * 100));
+          barra.style.width = pct + '%';
+          barra.className = 'h-full transition-all duration-500 ' +
+            (pct <= 15 ? 'bg-rose-500' : pct <= 40 ? 'bg-amber-500' : 'bg-emerald-500');
+          texto.innerText = `Has usado ${usados} de ${comprados} domicilios de tu último paquete.`;
+        } else {
+          barra.style.width = restantes > 0 ? '100%' : '0%';
+          texto.innerText = restantes > 0
+            ? 'Cada domicilio que tomes descuenta $' + COSTO_CARRERA.toLocaleString('es-CO') + '.'
+            : '';
+        }
+      }
+
+      // Aviso de recarga con la cuenta ya hecha.
+      if (aviso && avisoTxt) {
+        if (restantes === 0) {
+          avisoTxt.innerText = 'Te quedaste sin domicilios. Recarga para seguir recibiendo carreras: con $10.000 sumas 10 domicilios más.';
+          aviso.className = 'rounded-xl px-3 py-2 border bg-rose-950/70 border-rose-700 text-rose-200';
+          aviso.classList.remove('hidden');
+        } else if (restantes <= 3) {
+          const falta = (4 - restantes) * COSTO_CARRERA;
+          avisoTxt.innerText = `Te quedan pocos. Con $${(10000).toLocaleString('es-CO')} sumas 10 domicilios; con $${falta.toLocaleString('es-CO')} completas 4.`;
+          aviso.className = 'rounded-xl px-3 py-2 border bg-amber-950/70 border-amber-700 text-amber-200';
+          aviso.classList.remove('hidden');
+        } else {
+          aviso.classList.add('hidden');
+        }
+      }
+    }
+
     function updateHeaderUserUI() {
       const avatarImg = document.getElementById('header-user-avatar');
       const userIcon = document.getElementById('header-user-icon');
@@ -1129,7 +1268,7 @@
 
       document.getElementById('header-user-name').innerText = currentDriver.name || 'Ingresar';
       document.getElementById('header-user-phone').innerText = currentDriver.vehicle || currentDriver.phone || 'Moto';
-      document.getElementById('driver-balance-display').innerText = '$' + (currentDriver.balance || 0).toLocaleString() + ' COP';
+      pintarConsumoDePaquete();
 
       if (currentDriver.is_approved === false) {
         approvalBanner.classList.remove('hidden');
@@ -1190,34 +1329,136 @@
       showToast(`Perfil guardado, ${name}`);
     }
 
+    // ============ CAPTURA DEL COMPROBANTE DE PAGO ============
+    // La foto se comprime en el celular ANTES de enviarla. Un documento de
+    // Firestore no puede pasar de 1 MB, y una captura de pantalla moderna pesa
+    // varios MB; sin comprimir, el envío fallaría. Reducida a 900 px de ancho
+    // y calidad 0.55 queda alrededor de 80-150 KB, más que suficiente para
+    // leer valor, fecha y referencia de un Nequi.
+    let capturaComprobante = null;   // data URI listo para guardar
+    const LIMITE_COMPROBANTE = 600 * 1024;   // margen frente al tope de 1 MB
+
+    function procesarCapturaComprobante(input) {
+      const archivo = input.files && input.files[0];
+      if (!archivo) return;
+
+      if (!archivo.type.startsWith('image/')) {
+        showToast('Adjunta una imagen del comprobante', 'error');
+        input.value = '';
+        return;
+      }
+
+      const etiqueta = document.getElementById('recharge-file-label');
+      if (etiqueta) etiqueta.innerText = 'Procesando imagen...';
+
+      const lector = new FileReader();
+      lector.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const anchoMax = 900;
+          const escala = Math.min(1, anchoMax / img.width);
+          const lienzo = document.createElement('canvas');
+          lienzo.width = Math.round(img.width * escala);
+          lienzo.height = Math.round(img.height * escala);
+          lienzo.getContext('2d').drawImage(img, 0, 0, lienzo.width, lienzo.height);
+
+          // Si aún pesa mucho, se baja la calidad hasta que entre.
+          let calidad = 0.55;
+          let datos = lienzo.toDataURL('image/jpeg', calidad);
+          while (datos.length > LIMITE_COMPROBANTE && calidad > 0.25) {
+            calidad -= 0.1;
+            datos = lienzo.toDataURL('image/jpeg', calidad);
+          }
+
+          if (datos.length > LIMITE_COMPROBANTE) {
+            showToast('La imagen es demasiado pesada. Intenta con una captura más sencilla.', 'error');
+            quitarCapturaComprobante();
+            return;
+          }
+
+          capturaComprobante = datos;
+          const wrap = document.getElementById('recharge-preview-wrap');
+          const prev = document.getElementById('recharge-preview');
+          const info = document.getElementById('recharge-preview-info');
+          if (prev) prev.src = datos;
+          if (wrap) wrap.classList.remove('hidden');
+          if (info) info.innerText = `Listo para enviar (${Math.round(datos.length / 1024)} KB)`;
+          if (etiqueta) etiqueta.innerText = 'Cambiar captura';
+        };
+        img.onerror = () => {
+          showToast('No se pudo leer la imagen', 'error');
+          quitarCapturaComprobante();
+        };
+        img.src = ev.target.result;
+      };
+      lector.onerror = () => {
+        showToast('No se pudo abrir el archivo', 'error');
+        quitarCapturaComprobante();
+      };
+      lector.readAsDataURL(archivo);
+    }
+
+    function quitarCapturaComprobante() {
+      capturaComprobante = null;
+      const input = document.getElementById('recharge-receipt-file');
+      const wrap = document.getElementById('recharge-preview-wrap');
+      const etiqueta = document.getElementById('recharge-file-label');
+      if (input) input.value = '';
+      if (wrap) wrap.classList.add('hidden');
+      if (etiqueta) etiqueta.innerText = 'Adjuntar captura del comprobante';
+    }
+
     async function handleSendRechargeReceipt(e) {
       e.preventDefault();
+
+      if (!currentDriver.uid) {
+        showToast('Inicia sesión para pedir una recarga', 'error');
+        return;
+      }
+      if (!capturaComprobante) {
+        showToast('Adjunta la captura del pago para que el administrador pueda verificarlo', 'error');
+        return;
+      }
+
       const selectedPkgRadio = document.querySelector('input[name="recharge_package"]:checked');
       const amount = selectedPkgRadio ? parseInt(selectedPkgRadio.value) : 10000;
-      const pkgName = amount === 10000 ? '📦 10 Domicilios' : amount === 20000 ? '📦 20 Domicilios' : '📦 50 Domicilios';
-      const receiptUrl = document.getElementById('recharge-receipt-url').value.trim() || 'Nequi-Ref-' + Date.now();
+      const servicios = Math.floor(amount / COSTO_CARRERA);
+      const pkgName = `📦 ${servicios} Domicilios`;
+      const referencia = document.getElementById('recharge-receipt-url').value.trim();
+
+      const boton = e.target.querySelector('button[type="submit"]');
+      const textoBoton = boton ? boton.innerHTML : null;
+      if (boton) {
+        boton.disabled = true;
+        boton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Enviando...';
+      }
 
       try {
-        const rechargeData = {
+        await db.collection('recharges').add({
           driver_id: currentDriver.uid,
-          driver_email: currentDriver.email || 'driver@ubavoy.com',
+          driver_email: currentDriver.email || '',
           driver_name: currentDriver.name || 'Domiciliario UbaVoy',
           amount: amount,
+          servicios: servicios,
           package_name: pkgName,
-          receipt_url: receiptUrl,
+          receipt_ref: referencia,
+          receipt_image: capturaComprobante,
           status: 'pending',
           created_at: new Date().toISOString()
-        };
+        });
 
-        if (typeof db !== 'undefined' && db !== null) {
-          await db.collection('recharges').add(rechargeData);
-        }
-
+        quitarCapturaComprobante();
+        e.target.reset();
         closeRechargeModal();
-        showToast('✅ Comprobante enviado. Tu saldo se actualizará apenas el Administrador lo verifique.');
+        showToast(`Comprobante enviado. Al verificarlo sumarás ${servicios} domicilios.`);
       } catch (err) {
         console.error("Error enviando comprobante:", err);
-        showToast('No se pudo registrar la solicitud de recarga', 'error');
+        showToast('No se pudo enviar: ' + (err.code || err.message), 'error');
+      } finally {
+        if (boton) {
+          boton.disabled = false;
+          if (textoBoton !== null) boton.innerHTML = textoBoton;
+        }
       }
     }
 
@@ -1710,7 +1951,7 @@
 
               <button onclick="acceptOrder('${order.id}')"
                 class="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5">
-                <i class="fa-solid fa-motorcycle"></i> Aceptar Carrera (-$500 COP)
+                <i class="fa-solid fa-motorcycle"></i> Aceptar Carrera (-$1.000 COP)
               </button>
             </div>
           </div>
@@ -1873,7 +2114,10 @@
       }).join('');
     }
 
-    const COSTO_CARRERA = 500;
+    // Comisión que UbaVoy cobra al domiciliario por cada carrera.
+    // Debe coincidir con costoCarrera() en firestore.rules: si no, el
+    // servidor rechaza el descuento y no se puede aceptar ninguna carrera.
+    const COSTO_CARRERA = 1000;
 
     /**
      * Toma una carrera de forma ATÓMICA.
@@ -1938,7 +2182,7 @@
         if (err.message === 'YA_TOMADA') {
           showToast('Otro domiciliario tomó esta carrera primero.', 'warning');
         } else if (err.message === 'SALDO_INSUFICIENTE') {
-          showToast(`Necesitas al menos $${COSTO_CARRERA} de saldo para tomar la carrera.`, 'error');
+          showToast(`Necesitas al menos $${COSTO_CARRERA.toLocaleString('es-CO')} de saldo para tomar la carrera.`, 'error');
           openRechargeModal();
         } else if (err.message === 'PEDIDO_NO_EXISTE') {
           showToast('Esta carrera ya no está disponible.', 'warning');

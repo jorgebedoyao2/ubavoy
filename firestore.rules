@@ -32,7 +32,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ---------- Constantes del negocio ----------
-    function costoCarrera()    { return 500; }
+    function costoCarrera()    { return 1000; }  // comisión por carrera
     function preciosValidos()  { return [5000, 7000]; }  // urbano / perímetro
 
     // ---------- Helpers de identidad ----------

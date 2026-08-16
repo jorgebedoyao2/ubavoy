@@ -66,12 +66,12 @@ await check('Visitante anónimo NO puede leer perfiles de usuarios', () =>
 console.log('\n=== 2. Saldo infinito (borrar el navegador = recargarse) ===');
 await check('Domiciliario NO puede subirse el saldo a 999999', () =>
   assertFails(updateDoc(doc(driverOK, 'users/driverOK'), { balance: 999999 })));
-await check('Domiciliario NO puede descontarse menos de lo debido (100)', () =>
-  assertFails(updateDoc(doc(driverOK, 'users/driverOK'), { balance: 10000 - 100 })));
-await check('Domiciliario SÍ puede descontarse exactamente 500 (cobro real)', () =>
-  assertSucceeds(updateDoc(doc(driverOK, 'users/driverOK'), { balance: 10000 - 500 })));
+await check('Domiciliario NO puede descontarse menos de lo debido (500)', () =>
+  assertFails(updateDoc(doc(driverOK, 'users/driverOK'), { balance: 10000 - 500 })));
+await check('Domiciliario SÍ puede descontarse exactamente 1000 (comisión real)', () =>
+  assertSucceeds(updateDoc(doc(driverOK, 'users/driverOK'), { balance: 10000 - 1000 })));
 await check('Domiciliario sin saldo suficiente NO puede cobrarse', () =>
-  assertFails(updateDoc(doc(driverPobre, 'users/driverPobre'), { balance: 300 - 500 })));
+  assertFails(updateDoc(doc(driverPobre, 'users/driverPobre'), { balance: 300 - 1000 })));
 await check('Domiciliario NO puede tocar el saldo de OTRO domiciliario', () =>
   assertFails(updateDoc(doc(driverPobre, 'users/driverOK'), { balance: 9500 })));
 
