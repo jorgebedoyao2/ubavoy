@@ -17,9 +17,11 @@ rules_version = '2';
 // Google y NO se pueden saltar desde el navegador, a diferencia del PIN del
 // panel de admin.
 //
-// IMPORTANTE - primer administrador: las reglas impiden que alguien se
-// autoproclame admin. El primer admin se marca a mano una sola vez desde la
-// consola de Firebase: en users/{tu-uid} poner el campo role = "admin".
+// PRIMER ADMINISTRADOR: las reglas impiden que alguien se autoproclame admin,
+// lo que dejaria a la plataforma sin ningun administrador posible. Se resuelve
+// reconociendo el correo del dueno (ver esDuenoDeLaPlataforma) siempre que
+// venga de una cuenta de Google con el correo verificado. No hay que marcar
+// nada a mano en la consola.
 // ============================================================================
 
 service cloud.firestore {
