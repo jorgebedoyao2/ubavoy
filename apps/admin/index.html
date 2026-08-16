@@ -196,47 +196,70 @@
         </div>
       </div>
 
-      <!-- SECTOR: PRE-APROBACIÓN Y GESTIÓN DE DOMICILIARIOS POR EMAIL -->
+      <!-- ============================================================
+           CORREOS HABILITADOS PARA TRABAJAR
+           Esta es la llave de entrada de la plataforma: solo los correos
+           que estén aquí y activos pueden iniciar sesión como domiciliario
+           y ver carreras. Se habilitan cuando la persona paga su paquete.
+           ============================================================ -->
       <div class="glass-card rounded-2xl p-4 border border-purple-500/30 space-y-4 shadow-xl">
         <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
           <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
-            <i class="fa-solid fa-user-plus text-purple-400"></i> Pre-Aprobar Nuevo Domiciliario
+            <i class="fa-solid fa-key text-purple-400"></i> Habilitar Domiciliario que Pagó
           </h3>
+          <span id="autorizados-contador" class="text-[10px] font-bold text-purple-300 bg-purple-950 px-2 py-0.5 rounded-full border border-purple-800">0 activos</span>
         </div>
 
-        <form onsubmit="handlePreApproveDriver(event)" class="space-y-3 text-xs">
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Escribe el correo de Google con el que la persona va a iniciar sesión.
+          Mientras esté <strong class="text-emerald-400">activo</strong> podrá trabajar;
+          al desactivarlo pierde el acceso de inmediato, aunque ya esté dentro.
+        </p>
+
+        <form onsubmit="handleAutorizarCorreo(event)" class="space-y-3 text-xs">
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Correo de Google del domiciliario</label>
+            <input type="email" id="aut-email" required placeholder="carlos@gmail.com"
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-purple-500">
+          </div>
+
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block font-semibold text-slate-300 mb-1">Nombre Completo</label>
-              <input type="text" id="pre-driver-name" required placeholder="Ej: Carlos Gómez"
+              <label class="block font-semibold text-slate-300 mb-1">Nombre</label>
+              <input type="text" id="aut-nombre" required placeholder="Carlos Gómez"
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-purple-500">
             </div>
-
             <div>
-              <label class="block font-semibold text-slate-300 mb-1">Correo Electrónico (Gmail)</label>
-              <input type="email" id="pre-driver-email" required placeholder="conduct@gmail.com"
+              <label class="block font-semibold text-slate-300 mb-1">WhatsApp</label>
+              <input type="tel" id="aut-telefono" placeholder="3101234567"
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-purple-500">
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block font-semibold text-slate-300 mb-1">Teléfono WhatsApp</label>
-              <input type="tel" id="pre-driver-phone" required placeholder="3101234567"
+              <label class="block font-semibold text-slate-300 mb-1">Paquete pagado</label>
+              <select id="aut-paquete"
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-purple-500">
+                <option value="10000">10 domicilios · $10.000</option>
+                <option value="20000">20 domicilios · $20.000</option>
+                <option value="50000">50 domicilios · $50.000</option>
+                <option value="0">Sin recarga por ahora</option>
+              </select>
             </div>
-
             <div>
-              <label class="block font-semibold text-slate-300 mb-1">Vehículo / Placa</label>
-              <input type="text" id="pre-driver-vehicle" required placeholder="Moto FZ 150 - ABC-123"
+              <label class="block font-semibold text-slate-300 mb-1">Referencia de pago</label>
+              <input type="text" id="aut-referencia" placeholder="Nequi 1234"
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-purple-500">
             </div>
           </div>
 
           <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2">
-            <i class="fa-solid fa-check-double"></i> Pre-Aprobar e Inscribir Domiciliario ($0 COP Saldo)
+            <i class="fa-solid fa-key"></i> Habilitar este correo
           </button>
         </form>
+
+        <div id="autorizados-feed" class="space-y-2 pt-1"></div>
       </div>
 
       <!-- SECTOR GRÁFICOS CHART.JS -->
@@ -430,11 +453,130 @@
       salirDeAdmin();
     }
 
+    let dashboardIniciado = false;
+
     function initAdminDashboard() {
+      // onAuthStateChanged puede dispararse más de una vez; sin esta guarda
+      // se abrirían listeners duplicados sobre las mismas colecciones.
+      if (dashboardIniciado) return;
+      dashboardIniciado = true;
+
+      renderAutorizadosList();
       renderAdminDriversList();
       loadAdminStatsFromAPIAndFirestore();
       subscribeRealtimeAdminOrders();
       subscribePendingRechargesAdmin();
+    }
+
+    // ============================================================
+    // LISTA BLANCA DE CORREOS HABILITADOS
+    // ============================================================
+    let unsubAutorizados = null;
+
+    async function handleAutorizarCorreo(e) {
+      e.preventDefault();
+      const email = document.getElementById('aut-email').value.trim().toLowerCase();
+      const nombre = document.getElementById('aut-nombre').value.trim();
+      const telefono = document.getElementById('aut-telefono').value.trim().replace(/[^0-9]/g, '');
+      const montoPaquete = Number(document.getElementById('aut-paquete').value) || 0;
+      const referencia = document.getElementById('aut-referencia').value.trim();
+
+      if (!email || !nombre) {
+        showToast('El correo y el nombre son obligatorios', 'error');
+        return;
+      }
+
+      try {
+        // El ID del documento es el correo: así la regla lo encuentra
+        // directamente cuando la persona inicia sesión.
+        await db.collection('autorizados').doc(email).set({
+          email,
+          nombre,
+          telefono,
+          activo: true,
+          monto_paquete: montoPaquete,
+          referencia_pago: referencia,
+          autorizado_en: new Date().toISOString()
+        }, { merge: true });
+
+        // Si esa persona ya había entrado alguna vez, se le acredita el saldo
+        // del paquete de una vez. Si aún no ha entrado, el saldo se le carga
+        // desde la lista de domiciliarios cuando aparezca.
+        if (montoPaquete > 0) {
+          const yaRegistrado = await db.collection('users')
+            .where('role', '==', 'driver').where('email', '==', email).get();
+          if (!yaRegistrado.empty) {
+            const lote = db.batch();
+            yaRegistrado.forEach(d => lote.update(d.ref, {
+              balance: firebase.firestore.FieldValue.increment(montoPaquete),
+              is_approved: true
+            }));
+            await lote.commit();
+          }
+        }
+
+        e.target.reset();
+        showToast(`${nombre} quedó habilitado con ${email}`);
+      } catch (err) {
+        console.error('Error habilitando correo:', err);
+        showToast('No se pudo habilitar: ' + (err.code || err.message), 'error');
+      }
+    }
+
+    function renderAutorizadosList() {
+      const feed = document.getElementById('autorizados-feed');
+      const contador = document.getElementById('autorizados-contador');
+      if (!feed) return;
+
+      if (unsubAutorizados) { try { unsubAutorizados(); } catch (e) {} }
+
+      unsubAutorizados = db.collection('autorizados').onSnapshot((snap) => {
+        const filas = [];
+        snap.forEach(d => filas.push({ correo: d.id, ...d.data() }));
+        filas.sort((a, b) => (b.activo === true) - (a.activo === true));
+
+        const activos = filas.filter(f => f.activo === true).length;
+        if (contador) contador.innerText = `${activos} activo${activos === 1 ? '' : 's'}`;
+
+        if (!filas.length) {
+          feed.innerHTML = `
+            <p class="text-[11px] text-slate-500 text-center py-3">
+              Todavía no has habilitado ningún correo. Nadie puede trabajar como domiciliario.
+            </p>`;
+          return;
+        }
+
+        feed.innerHTML = filas.map(f => `
+          <div class="flex items-center justify-between gap-2 bg-slate-900/70 border ${f.activo ? 'border-emerald-700/50' : 'border-slate-700'} rounded-xl px-3 py-2">
+            <div class="min-w-0">
+              <p class="text-[11px] font-bold text-slate-100 truncate">${escapeHtml(f.nombre || 'Sin nombre')}</p>
+              <p class="text-[10px] font-mono text-purple-300 truncate">${escapeHtml(f.correo)}</p>
+              ${f.referencia_pago ? `<p class="text-[9px] text-slate-500 truncate">Pago: ${escapeHtml(f.referencia_pago)}</p>` : ''}
+            </div>
+            <button onclick="cambiarHabilitacion('${escapeHtml(f.correo)}', ${f.activo === true})"
+              class="shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold ${f.activo
+                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                : 'bg-slate-800 text-slate-400 border border-slate-600'}">
+              ${f.activo ? 'Activo' : 'Inactivo'}
+            </button>
+          </div>
+        `).join('');
+      }, (err) => {
+        console.error('Error leyendo autorizados:', err);
+        feed.innerHTML = `<p class="text-[11px] text-rose-300 py-2">No se pudo leer la lista: ${escapeHtml(err.code || err.message)}</p>`;
+      });
+    }
+
+    async function cambiarHabilitacion(correo, estabaActivo) {
+      try {
+        await db.collection('autorizados').doc(correo).update({ activo: !estabaActivo });
+        showToast(!estabaActivo
+          ? 'Correo habilitado: ya puede trabajar'
+          : 'Correo desactivado: pierde el acceso ahora mismo');
+      } catch (e) {
+        console.error('Error cambiando habilitación:', e);
+        showToast('No se pudo cambiar: ' + (e.code || e.message), 'error');
+      }
     }
 
     async function handlePreApproveDriver(e) {

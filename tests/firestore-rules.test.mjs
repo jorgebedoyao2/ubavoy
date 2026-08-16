@@ -4,7 +4,7 @@ import {
   assertFails,
   assertSucceeds,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore';
 
 const RULES = readFileSync('firestore.rules', 'utf8');
 
@@ -17,9 +17,12 @@ const testEnv = await initializeTestEnvironment({
 await testEnv.withSecurityRulesDisabled(async (ctx) => {
   const db = ctx.firestore();
   await setDoc(doc(db, 'users/cliente1'), { role: 'client', balance: 0, is_approved: false, name: 'Ana' });
-  await setDoc(doc(db, 'users/driverOK'), { role: 'driver', balance: 10000, is_approved: true, name: 'Carlos' });
-  await setDoc(doc(db, 'users/driverPobre'), { role: 'driver', balance: 300, is_approved: true, name: 'Luis' });
-  await setDoc(doc(db, 'users/driverNoAprob'), { role: 'driver', balance: 5000, is_approved: false, name: 'Pedro' });
+  await setDoc(doc(db, 'users/driverOK'), { role: 'driver', balance: 10000, is_approved: true, name: 'Carlos', email: 'driverok@gmail.com' });
+  await setDoc(doc(db, 'users/driverPobre'), { role: 'driver', balance: 300, is_approved: true, name: 'Luis', email: 'pobre@gmail.com' });
+  await setDoc(doc(db, 'users/driverNoAprob'), { role: 'driver', balance: 5000, is_approved: false, name: 'Pedro', email: 'noaprob@gmail.com' });
+  // Lista blanca: solo estos correos pagaron su paquete.
+  await setDoc(doc(db, 'autorizados/driverok@gmail.com'), { activo: true, nombre: 'Carlos' });
+  await setDoc(doc(db, 'autorizados/pobre@gmail.com'), { activo: true, nombre: 'Luis' });
   await setDoc(doc(db, 'users/adminUid'), { role: 'admin', balance: 0, is_approved: true, name: 'Jorge' });
 
   await setDoc(doc(db, 'orders/pedidoLibre'), {
@@ -41,9 +44,9 @@ await testEnv.withSecurityRulesDisabled(async (ctx) => {
 const anon      = testEnv.unauthenticatedContext().firestore();
 const cliente1  = testEnv.authenticatedContext('cliente1').firestore();
 const cliente2  = testEnv.authenticatedContext('cliente2').firestore();
-const driverOK  = testEnv.authenticatedContext('driverOK').firestore();
-const driverPobre = testEnv.authenticatedContext('driverPobre').firestore();
-const driverNoAprob = testEnv.authenticatedContext('driverNoAprob').firestore();
+const driverOK  = testEnv.authenticatedContext('driverOK', { email: 'driverok@gmail.com' }).firestore();
+const driverPobre = testEnv.authenticatedContext('driverPobre', { email: 'pobre@gmail.com' }).firestore();
+const driverNoAprob = testEnv.authenticatedContext('driverNoAprob', { email: 'noaprob@gmail.com' }).firestore();
 const admin     = testEnv.authenticatedContext('adminUid').firestore();
 
 let pass = 0, fail = 0;
@@ -144,8 +147,12 @@ console.log('\n=== 3b. Arranque del administrador por correo ===');
 const dueno = testEnv.authenticatedContext('uidJorge', {
   email: 'devsites02@gmail.com', email_verified: true,
 }).firestore();
-const duenoSinVerificar = testEnv.authenticatedContext('uidFalso', {
-  email: 'devsites02@gmail.com', email_verified: false,
+// Este es el caso que fallaba en producción: token sin email_verified.
+const duenoSinVerificar = testEnv.authenticatedContext('uidJorge', {
+  email: 'devsites02@gmail.com',
+}).firestore();
+const duenoMayusculas = testEnv.authenticatedContext('uidJorge', {
+  email: 'DevSites02@Gmail.com',
 }).firestore();
 const impostor = testEnv.authenticatedContext('uidMalo', {
   email: 'otro@gmail.com', email_verified: true,
@@ -153,12 +160,50 @@ const impostor = testEnv.authenticatedContext('uidMalo', {
 
 await check('El dueño manda aunque NO tenga documento en users', () =>
   assertSucceeds(getDocs(collection(dueno, 'orders'))));
+await check('El dueño lista domiciliarios (la consulta del panel)', () =>
+  assertSucceeds(getDocs(query(collection(dueno, 'users'), where('role', '==', 'driver')))));
+await check('El dueño entra aunque el token no traiga email_verified', () =>
+  assertSucceeds(getDocs(query(collection(duenoSinVerificar, 'users'), where('role', '==', 'driver')))));
+await check('El correo del dueño en MAYÚSCULAS también entra', () =>
+  assertSucceeds(getDocs(collection(duenoMayusculas, 'users'))));
 await check('El dueño SÍ puede aprobar domiciliarios de entrada', () =>
   assertSucceeds(updateDoc(doc(dueno, 'users/driverNoAprob'), { is_approved: true })));
-await check('Correo del dueño SIN verificar NO da acceso', () =>
-  assertFails(getDocs(collection(duenoSinVerificar, 'users'))));
 await check('Otro correo cualquiera NO es admin', () =>
   assertFails(getDocs(collection(impostor, 'users'))));
+
+console.log('\n=== 3c. Habilitación de domiciliarios por correo (quien pagó) ===');
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const d = ctx.firestore();
+  await setDoc(doc(d, 'users/driverPago'), { role: 'driver', balance: 10000, is_approved: true, email: 'pago@gmail.com' });
+  await setDoc(doc(d, 'users/driverMoroso'), { role: 'driver', balance: 10000, is_approved: true, email: 'moroso@gmail.com' });
+  await setDoc(doc(d, 'autorizados/pago@gmail.com'), { activo: true, nombre: 'Carlos', paquete: '10 domicilios' });
+  await setDoc(doc(d, 'autorizados/moroso@gmail.com'), { activo: false, nombre: 'Luis', paquete: 'vencido' });
+});
+
+const conPago = testEnv.authenticatedContext('driverPago', { email: 'pago@gmail.com' }).firestore();
+const sinPago = testEnv.authenticatedContext('driverMoroso', { email: 'moroso@gmail.com' }).firestore();
+const nuncaAutorizado = testEnv.authenticatedContext('driverPago', { email: 'colado@gmail.com' }).firestore();
+
+await check('Domiciliario con correo habilitado SÍ ve la bolsa de carreras', () =>
+  assertSucceeds(getDocs(collection(conPago, 'orders'))));
+await check('Domiciliario DESACTIVADO por el admin ya NO ve carreras', () =>
+  assertFails(getDocs(collection(sinPago, 'orders'))));
+await check('Correo que nunca fue autorizado NO ve carreras', () =>
+  assertFails(getDocs(collection(nuncaAutorizado, 'orders'))));
+await check('Aunque is_approved siga en true, manda la habilitación por correo', () =>
+  assertFails(getDocs(collection(sinPago, 'orders'))));
+await check('Cada quien puede consultar SU propia habilitación', () =>
+  assertSucceeds(getDoc(doc(conPago, 'autorizados/pago@gmail.com'))));
+await check('Nadie puede espiar la habilitación de OTRO correo', () =>
+  assertFails(getDoc(doc(conPago, 'autorizados/moroso@gmail.com'))));
+await check('Un domiciliario NO puede auto-habilitarse', () =>
+  assertFails(setDoc(doc(sinPago, 'autorizados/moroso@gmail.com'), { activo: true })));
+await check('Un domiciliario NO puede listar todos los autorizados', () =>
+  assertFails(getDocs(collection(conPago, 'autorizados'))));
+await check('El admin SÍ habilita un correo nuevo', () =>
+  assertSucceeds(setDoc(doc(dueno, 'autorizados/nuevo@gmail.com'), { activo: true, nombre: 'Ana' })));
+await check('El admin SÍ puede desactivar a quien no renovó', () =>
+  assertSucceeds(updateDoc(doc(dueno, 'autorizados/pago@gmail.com'), { activo: false })));
 
 console.log('\n=== 6b. Ubicación en vivo y novedades ===');
 await check('Domiciliario asignado SÍ puede compartir su ubicación', () =>

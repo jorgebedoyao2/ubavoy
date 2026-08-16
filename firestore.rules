@@ -49,26 +49,45 @@ service cloud.firestore {
       return datosDe(request.auth.uid).role;
     }
 
+    // Correo de la sesión, siempre en minúsculas para que las comparaciones
+    // no dependan de cómo lo escribió la persona.
+    function miCorreo() {
+      return request.auth.token.get('email', '').lower();
+    }
+
     // Correo del dueño de la plataforma. Se reconoce como administrador
-    // aunque su documento en 'users' no exista o se pierda, lo que evita el
-    // problema del huevo y la gallina: las reglas impiden que alguien se
-    // autoproclame admin, así que sin esto nadie podría serlo la primera vez.
-    // Se exige email_verified para que valga solo con la cuenta real de
-    // Google, no con un correo escrito a mano.
+    // aunque su documento en 'users' no exista, lo que evita el problema del
+    // huevo y la gallina: las reglas impiden autoproclamarse admin, así que
+    // sin esto nadie podría serlo la primera vez.
+    //
+    // NOTA: no se exige email_verified. En el proyecto el ÚNICO proveedor
+    // habilitado es Google, que entrega el correo ya verificado; exigir ese
+    // campo hacía que el panel fallara con permission-denied si el token no
+    // lo traía. Si algún día se habilita ingreso con contraseña, hay que
+    // volver a exigirlo.
     function esDuenoDeLaPlataforma() {
-      return estaLogueado()
-             && request.auth.token.get('email', '') == 'devsites02@gmail.com'
-             && request.auth.token.get('email_verified', false) == true;
+      return estaLogueado() && miCorreo() == 'devsites02@gmail.com';
     }
 
     function esAdmin() {
       return esDuenoDeLaPlataforma() || (existeMiPerfil() && miRol() == 'admin');
     }
 
+    // ---------- Habilitación de domiciliarios por correo ----------
+    // El administrador habilita el correo de quien pagó su paquete de
+    // domicilios en la colección 'autorizados'. Mientras ese documento exista
+    // y esté activo, la persona puede trabajar; al desactivarlo pierde el
+    // acceso de inmediato, sin importar lo que diga su perfil.
+    function correoHabilitado(correo) {
+      return correo != ''
+             && exists(/databases/$(database)/documents/autorizados/$(correo))
+             && get(/databases/$(database)/documents/autorizados/$(correo)).data.get('activo', false) == true;
+    }
+
     function esDomiciliarioAprobado() {
-      return existeMiPerfil() &&
-             miRol() == 'driver' &&
-             datosDe(request.auth.uid).is_approved == true;
+      return existeMiPerfil()
+             && miRol() == 'driver'
+             && correoHabilitado(miCorreo());
     }
 
     // Devuelve true si la escritura SOLO toca los campos permitidos.
@@ -239,6 +258,22 @@ service cloud.firestore {
       // Aprobar o rechazar una recarga es exclusivo del admin.
       // (El saldo se acredita con increment() en la misma transacción.)
       allow update, delete: if esAdmin();
+    }
+
+    // =========================================================================
+    // autorizados/{correo}  - lista blanca de domiciliarios habilitados
+    // =========================================================================
+    // El ID del documento ES el correo en minúsculas. Solo el administrador
+    // escribe aquí: es el control de quién puede trabajar en la plataforma.
+    match /autorizados/{correo} {
+
+      // Cada persona puede consultar si SU propio correo está habilitado,
+      // para que la app le explique por qué no puede entrar. El admin ve todo.
+      allow get: if esAdmin() || (estaLogueado() && miCorreo() == correo);
+      allow list: if esAdmin();
+
+      // Habilitar, desactivar o borrar habilitaciones es exclusivo del admin.
+      allow create, update, delete: if esAdmin();
     }
 
     // =========================================================================

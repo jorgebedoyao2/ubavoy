@@ -664,6 +664,10 @@
           currentDriver = perfil;
           updateHeaderUserUI();
 
+          // La llave real es la lista de correos habilitados que maneja el
+          // administrador según quién pagó su paquete.
+          perfil.is_approved = await correoEstaHabilitado(perfil.email);
+
           if (perfil.is_approved === true) {
             mostrarEstadoAcceso('aprobado');
             isAvailable = true;
@@ -723,6 +727,23 @@
       };
     }
 
+    /**
+     * Consulta si el administrador habilitó este correo. Las reglas permiten
+     * que cada quien lea SU propia habilitación, para poder explicarle por
+     * qué no entra en vez de dejarlo con un error seco.
+     */
+    async function correoEstaHabilitado(correo) {
+      if (!correo) return false;
+      try {
+        const targetDb = (typeof db !== 'undefined' && db) ? db : window.db;
+        const snap = await targetDb.collection('autorizados').doc(correo.toLowerCase()).get();
+        return snap.exists && snap.data().activo === true;
+      } catch (e) {
+        console.warn('No se pudo consultar la habilitación:', e.code || e.message);
+        return false;
+      }
+    }
+
     /** Muestra la pantalla que corresponda: login, "en revisión" o la app. */
     function mostrarEstadoAcceso(estado) {
       const bloqueo = document.getElementById('acceso-bloqueado');
@@ -747,8 +768,8 @@
       bloqueo.classList.add('flex');
 
       if (estado === 'pendiente') {
-        titulo.innerText = 'Tu cuenta está en revisión';
-        texto.innerText = 'El administrador de UbaVoy debe aprobarte antes de que puedas ver y tomar carreras. Te avisaremos apenas quede lista.';
+        titulo.innerText = 'Tu correo aún no está habilitado';
+        texto.innerText = 'Para trabajar en UbaVoy, el administrador debe habilitar tu correo después de que pagues tu paquete de domicilios. Escríbele por WhatsApp con este correo y la referencia de tu pago.';
         btnEntrar.classList.add('hidden');
         btnSalir.classList.remove('hidden');
         correo.innerText = currentDriver.email || '';
