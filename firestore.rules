@@ -6,22 +6,26 @@ rules_version = '2';
 // Modelo de identidad: TODA persona (cliente, domiciliario, admin) entra con
 // Firebase Auth. El documento users/{uid} usa el uid de Auth como ID.
 //
+// QUIÉN PUEDE TRABAJAR: la llave de acceso de los domiciliarios es la
+// colección 'autorizados', donde el administrador habilita el correo de quien
+// pagó su paquete. Ese es el control real; el campo is_approved del perfil
+// quedó solo como dato informativo del panel.
+//
 // Campos sensibles y quién los puede tocar:
 //   role         -> solo admin (define si es client / driver / admin)
-//   is_approved  -> solo admin (habilita al domiciliario para ver carreras)
 //   balance      -> solo admin (recargas). El domiciliario SOLO puede
 //                   descontarse exactamente el costo de una carrera.
+//   autorizados  -> solo admin (habilita o corta el acceso al trabajo)
 //
 // Nota sobre el plan Spark (gratis): no hay Cloud Functions, así que toda la
 // validación de dinero vive aquí. Estas reglas corren en los servidores de
-// Google y NO se pueden saltar desde el navegador, a diferencia del PIN del
-// panel de admin.
+// Google y NO se pueden saltar desde el navegador, a diferencia del PIN que
+// tenía antes el panel de admin.
 //
 // PRIMER ADMINISTRADOR: las reglas impiden que alguien se autoproclame admin,
-// lo que dejaria a la plataforma sin ningun administrador posible. Se resuelve
-// reconociendo el correo del dueno (ver esDuenoDeLaPlataforma) siempre que
-// venga de una cuenta de Google con el correo verificado. No hay que marcar
-// nada a mano en la consola.
+// lo que dejaría a la plataforma sin ningún administrador posible. Se resuelve
+// reconociendo el correo del dueño (ver esDuenoDeLaPlataforma). No hay que
+// marcar nada a mano en la consola.
 // ============================================================================
 
 service cloud.firestore {
