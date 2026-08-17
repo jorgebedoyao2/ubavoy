@@ -71,6 +71,7 @@
   <!-- Shared Firebase Config File & Universal PWA Installer -->
   <script src="/shared/firebase_config.js"></script>
   <script src="/shared/pwa_installer.js"></script>
+  <script src="/shared/chat.js"></script>
 
   <style>
     body {
@@ -335,10 +336,13 @@
               </div>
             </div>
 
-            <a id="driver-whatsapp-link" href="javascript:void(0)" target="_blank"
-              class="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 shadow-md">
-              <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp
-            </a>
+            <!-- El chat interno reemplaza a WhatsApp: la conversación queda
+                 dentro de la plataforma, sin exponer el número de nadie. -->
+            <button type="button" onclick="abrirChatDelPedido()"
+              class="relative py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 shadow-md">
+              <i class="fa-solid fa-comments text-sm"></i> Chatear
+              <span id="chat-punto-cliente" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 border border-slate-950"></span>
+            </button>
           </div>
 
           <button type="button" onclick="toggleLiveTrackingMapModal()"
@@ -493,6 +497,60 @@
         });
       } else {
         showToast("Geolocalización no disponible", "warning");
+      }
+    }
+
+    // ============ CHAT INTERNO CON EL DOMICILIARIO ============
+    let pedidoActivoId = null;
+    let unsubChatNoLeidos = null;
+
+    /** Abre el chat del pedido que el cliente está siguiendo. */
+    async function abrirChatDelPedido() {
+      const usuario = (typeof auth !== 'undefined' && auth) ? auth.currentUser : null;
+      if (!usuario) {
+        showToast('Entra con tu cuenta para usar el chat', 'error');
+        return;
+      }
+      if (!pedidoActivoId) {
+        showToast('El chat se habilita cuando un domiciliario toma tu pedido', 'warning');
+        return;
+      }
+
+      const titulo = document.getElementById('chatTitulo');
+      const sub = document.getElementById('chatSubtitulo');
+      const nombre = (document.getElementById('driver-assigned-name') || {}).innerText;
+      if (titulo) titulo.innerText = 'Chat con ' + (nombre || 'tu domiciliario');
+      if (sub) sub.innerText = 'Solo sobre este pedido';
+
+      const punto = document.getElementById('chat-punto-cliente');
+      if (punto) punto.classList.add('hidden');
+
+      await chatAbrir(pedidoActivoId, 'cliente', usuario.uid);
+    }
+
+    /**
+     * Enciende el chat cuando ya hay domiciliario asignado y lo apaga cuando
+     * el pedido termina. También dispara el borrado de respaldo.
+     */
+    function sincronizarChatConPedido(orderId, order) {
+      const estado = (order.status || '').toLowerCase();
+      const enCurso = ['assigned', 'in_transit', 'picked_up'].includes(estado);
+      pedidoActivoId = enCurso ? orderId : null;
+
+      if (enCurso) {
+        const usuario = (typeof auth !== 'undefined' && auth) ? auth.currentUser : null;
+        if (usuario && !unsubChatNoLeidos) {
+          unsubChatNoLeidos = chatEscucharNoLeidos(orderId, usuario.uid, (hay) => {
+            const punto = document.getElementById('chat-punto-cliente');
+            if (punto) punto.classList.toggle('hidden', !hay);
+          });
+        }
+      } else {
+        if (unsubChatNoLeidos) { try { unsubChatNoLeidos(); } catch (e) {} unsubChatNoLeidos = null; }
+        // Si el pedido ya se entregó, se limpia la conversación vencida.
+        if (estado === 'completed' || estado === 'delivered') {
+          chatBorrarSiVencio(orderId, order.completed_at || order.delivered_at);
+        }
       }
     }
 
@@ -886,6 +944,7 @@
         try {
           actualizarMapaRastreo(order);
           mostrarNovedadCliente(order);
+          sincronizarChatConPedido(orderId, order);
         } catch (errMapa) {
           console.error('Fallo pintando el rastreo en vivo:', errMapa);
         }
@@ -1291,5 +1350,49 @@
       }
     });
   </script>
+
+    <!-- ============================================================
+         CHAT INTERNO Y EFÍMERO
+         Conversación directa entre el cliente y su domiciliario, solo
+         mientras dura la entrega. Sin fotos ni audios (evita costos de
+         almacenamiento y datos del celular) y sin teléfonos (evita que el
+         negocio se salga de la plataforma).
+         ============================================================ -->
+    <div id="chatPanel" class="hidden fixed inset-0 z-[80] bg-slate-950 flex-col">
+
+      <header class="glass-header px-3 py-3 flex items-center gap-3 shrink-0">
+        <button type="button" onclick="chatCerrar()"
+          class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 shrink-0">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <div class="min-w-0 flex-1">
+          <h3 id="chatTitulo" class="font-display font-bold text-sm text-white truncate">Chat de la entrega</h3>
+          <p id="chatSubtitulo" class="text-[11px] text-slate-400 truncate">Mensajes solo de este pedido</p>
+        </div>
+        <span class="shrink-0 text-[9px] uppercase tracking-wide font-bold px-2 py-1 rounded-full bg-slate-900 text-slate-400 border border-slate-700">
+          <i class="fa-solid fa-clock-rotate-left mr-1"></i>Temporal
+        </span>
+      </header>
+
+      <p id="chatAviso" class="text-[10px] text-slate-500 px-4 py-2 text-center border-b border-slate-800 shrink-0"></p>
+
+      <div id="chatMensajes" class="flex-1 overflow-y-auto py-3 space-y-2"></div>
+
+      <div id="chatEntrada" class="p-3 border-t border-slate-800 bg-slate-950 shrink-0">
+        <form onsubmit="event.preventDefault(); chatEnviar();" class="flex items-end gap-2">
+          <textarea id="chatTexto" rows="1" maxlength="500" placeholder="Escribe tu mensaje..."
+            class="flex-1 resize-none bg-slate-900 border border-slate-700 rounded-2xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600 outline-none focus:border-emerald-500 max-h-24"
+            oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,96)+'px';"></textarea>
+          <button type="submit" id="chatEnviarBtn"
+            class="w-11 h-11 shrink-0 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shadow-lg transition-all active:scale-95">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </form>
+        <p class="text-[9px] text-slate-600 text-center mt-1.5">
+          Solo texto. No se pueden enviar fotos, audios ni números de teléfono.
+        </p>
+      </div>
+    </div>
+
 </body>
 </html>

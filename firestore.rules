@@ -265,6 +265,106 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // chats/{pedidoId}  - chat interno y efímero de una entrega
+    // =========================================================================
+    // Existe SOLO mientras dura la entrega. El documento padre guarda quiénes
+    // son los dos participantes (denormalizado desde el pedido) para que las
+    // reglas de cada mensaje resuelvan con UNA sola lectura, en vez de ir al
+    // pedido en cada mensaje.
+    //
+    // Nadie más entra: ni otro domiciliario, ni otro cliente, ni un visitante.
+    // El administrador tampoco lee las conversaciones: puede ver que el chat
+    // existe, pero no su contenido. Es una decisión deliberada de privacidad.
+    match /chats/{pedidoId} {
+
+      function datosChat() {
+        return resource.data;
+      }
+
+      function soyParticipante() {
+        return estaLogueado()
+               && resource != null
+               && (resource.data.get('cliente_uid', '') == request.auth.uid
+                   || resource.data.get('domiciliario_uid', '') == request.auth.uid);
+      }
+
+      // El pedido es la fuente de verdad de quién puede hablar con quién.
+      function pedidoDelChat() {
+        return get(/databases/$(database)/documents/orders/$(pedidoId)).data;
+      }
+
+      allow get: if soyParticipante();
+      allow list: if false;   // nadie navega la lista de chats ajenos
+
+      // Se crea al aceptar la carrera. Los participantes deben coincidir
+      // EXACTAMENTE con los del pedido: así nadie abre un chat con un
+      // cliente que no le corresponde.
+      allow create: if estaLogueado()
+                    && request.resource.data.cliente_uid == pedidoDelChat().client_uid
+                    && request.resource.data.domiciliario_uid == pedidoDelChat().get('assigned_driver_id', '')
+                    && request.auth.uid == request.resource.data.domiciliario_uid;
+
+      // Solo se marca el cierre; los participantes no cambian nunca.
+      allow update: if soyParticipante()
+                    && soloCambia(['cerrado_en', 'expira_en'])
+                    && request.resource.data.cliente_uid == resource.data.cliente_uid
+                    && request.resource.data.domiciliario_uid == resource.data.domiciliario_uid;
+
+      allow delete: if esAdmin();
+
+      // ---------------------------------------------------------------------
+      // mensajes/{mensajeId}
+      // ---------------------------------------------------------------------
+      match /mensajes/{mensajeId} {
+
+        function participaEnEsteChat() {
+          return estaLogueado()
+                 && exists(/databases/$(database)/documents/chats/$(pedidoId))
+                 && (get(/databases/$(database)/documents/chats/$(pedidoId)).data.cliente_uid == request.auth.uid
+                     || get(/databases/$(database)/documents/chats/$(pedidoId)).data.domiciliario_uid == request.auth.uid);
+        }
+
+        function esElCliente() {
+          return get(/databases/$(database)/documents/chats/$(pedidoId)).data.cliente_uid == request.auth.uid;
+        }
+
+        allow read: if participaEnEsteChat();
+
+        // Reglas del mensaje. Se validan EN EL SERVIDOR, así que no se pueden
+        // burlar modificando la app:
+        //   - solo texto: no se acepta ningún campo de imagen ni de archivo,
+        //     lo que evita costos de almacenamiento y ancho de banda.
+        //   - el remitente declarado debe corresponder a quien escribe.
+        //   - se bloquean secuencias de 7 o más dígitos seguidos, que es como
+        //     se cuelan teléfonos y números de cuenta para sacar el negocio
+        //     de la plataforma o presionar al cliente por fuera.
+        //   - todo mensaje nace con fecha de expiración: nada queda para
+        //     siempre en la base de datos.
+        allow create: if participaEnEsteChat()
+                      && request.resource.data.keys().hasOnly(
+                           ['remitente', 'autor_uid', 'texto', 'creado_en', 'expira_en'])
+                      && request.resource.data.autor_uid == request.auth.uid
+                      && request.resource.data.remitente == (esElCliente() ? 'cliente' : 'domiciliario')
+                      && request.resource.data.texto is string
+                      && request.resource.data.texto.size() > 0
+                      && request.resource.data.texto.size() <= 500
+                      && !request.resource.data.texto.matches('.*[0-9]{7,}.*')
+                      && request.resource.data.expira_en is timestamp;
+
+        // Un mensaje enviado no se edita: el historial de una conversación no
+        // se reescribe. Solo se le puede adelantar la expiración, que es lo
+        // que hace la app al entregar el pedido.
+        allow update: if participaEnEsteChat()
+                      && soloCambia(['expira_en'])
+                      && request.resource.data.expira_en is timestamp;
+
+        // Cualquiera de los dos puede borrar la conversación al cerrarse, que
+        // es el respaldo del borrado automático.
+        allow delete: if participaEnEsteChat() || esAdmin();
+      }
+    }
+
+    // =========================================================================
     // autorizados/{correo}  - lista blanca de domiciliarios habilitados
     // =========================================================================
     // El ID del documento ES el correo en minúsculas. Solo el administrador

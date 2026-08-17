@@ -4,7 +4,7 @@ import {
   assertFails,
   assertSucceeds,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where } from 'firebase/firestore';
 
 const RULES = readFileSync('firestore.rules', 'utf8');
 
@@ -227,6 +227,80 @@ await check('Domiciliario NO puede cambiar el PIN de entrega', () =>
   assertFails(updateDoc(doc(driverOK, 'orders/pedidoTomado'), { delivery_pin: '0000' })));
 await check('Cliente SÍ puede leer la ubicación de su domiciliario', () =>
   assertSucceeds(getDoc(doc(cliente1, 'orders/pedidoTomado'))));
+
+console.log('\n=== 7. Chat interno y efímero ===');
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const d = ctx.firestore();
+  await setDoc(doc(d, 'chats/pedidoTomado'), {
+    cliente_uid: 'cliente1', domiciliario_uid: 'driverOK', creado_en: new Date().toISOString(),
+  });
+});
+
+const futuro = new Date(Date.now() + 3600e3);
+const msg = (remitente, autor, texto) => ({
+  remitente, autor_uid: autor, texto, creado_en: new Date(), expira_en: futuro,
+});
+
+await check('El cliente SÍ puede escribir en el chat de SU pedido', () =>
+  assertSucceeds(setDoc(doc(cliente1, 'chats/pedidoTomado/mensajes/m1'),
+    msg('cliente', 'cliente1', 'Hola, estoy en el segundo piso'))));
+await check('El domiciliario asignado SÍ puede responder', () =>
+  assertSucceeds(setDoc(doc(driverOK, 'chats/pedidoTomado/mensajes/m2'),
+    msg('domiciliario', 'driverOK', 'Voy llegando en 5 minutos'))));
+await check('Ambos SÍ pueden leer la conversación', () =>
+  assertSucceeds(getDocs(collection(cliente1, 'chats/pedidoTomado/mensajes'))));
+
+await check('Un tercero NO puede leer la conversación', () =>
+  assertFails(getDocs(collection(cliente2, 'chats/pedidoTomado/mensajes'))));
+await check('Otro domiciliario NO puede leer la conversación', () =>
+  assertFails(getDocs(collection(driverPobre, 'chats/pedidoTomado/mensajes'))));
+await check('Un visitante anónimo NO puede leer la conversación', () =>
+  assertFails(getDocs(collection(anon, 'chats/pedidoTomado/mensajes'))));
+await check('Un tercero NO puede escribir en el chat', () =>
+  assertFails(setDoc(doc(cliente2, 'chats/pedidoTomado/mensajes/intruso'),
+    msg('cliente', 'cliente2', 'Mensaje colado'))));
+
+await check('BLOQUEA enviar un número de teléfono', () =>
+  assertFails(setDoc(doc(cliente1, 'chats/pedidoTomado/mensajes/tel'),
+    msg('cliente', 'cliente1', 'Llámame al 3125559090 y arreglamos por fuera'))));
+await check('BLOQUEA enviar un número de cuenta para pagar por fuera', () =>
+  assertFails(setDoc(doc(driverOK, 'chats/pedidoTomado/mensajes/nequi'),
+    msg('domiciliario', 'driverOK', 'Consigna a la cuenta 30011122233'))));
+await check('PERMITE direcciones con números cortos', () =>
+  assertSucceeds(setDoc(doc(cliente1, 'chats/pedidoTomado/mensajes/dir'),
+    msg('cliente', 'cliente1', 'Es la Calle 9 # 6-20, apto 302'))));
+
+await check('BLOQUEA adjuntar una imagen al mensaje', () =>
+  assertFails(setDoc(doc(cliente1, 'chats/pedidoTomado/mensajes/img'), {
+    remitente: 'cliente', autor_uid: 'cliente1', texto: 'mira',
+    creado_en: new Date(), expira_en: futuro, imagen: 'data:image/jpeg;base64,AAAA',
+  })));
+await check('BLOQUEA adjuntar un audio al mensaje', () =>
+  assertFails(setDoc(doc(driverOK, 'chats/pedidoTomado/mensajes/aud'), {
+    remitente: 'domiciliario', autor_uid: 'driverOK', texto: 'oye',
+    creado_en: new Date(), expira_en: futuro, audio_url: 'https://x/a.mp3',
+  })));
+await check('BLOQUEA un mensaje sin fecha de expiración', () =>
+  assertFails(setDoc(doc(cliente1, 'chats/pedidoTomado/mensajes/eterno'), {
+    remitente: 'cliente', autor_uid: 'cliente1', texto: 'para siempre', creado_en: new Date(),
+  })));
+await check('BLOQUEA un mensaje de más de 500 caracteres', () =>
+  assertFails(setDoc(doc(cliente1, 'chats/pedidoTomado/mensajes/largo'),
+    msg('cliente', 'cliente1', 'x'.repeat(501)))));
+
+await check('El cliente NO puede hacerse pasar por el domiciliario', () =>
+  assertFails(setDoc(doc(cliente1, 'chats/pedidoTomado/mensajes/falso'),
+    msg('domiciliario', 'cliente1', 'Soy el domiciliario'))));
+await check('NO se puede firmar un mensaje con el uid de otro', () =>
+  assertFails(setDoc(doc(cliente1, 'chats/pedidoTomado/mensajes/falso2'),
+    msg('cliente', 'driverOK', 'Mensaje suplantado'))));
+await check('Un mensaje enviado NO se puede editar', () =>
+  assertFails(updateDoc(doc(cliente1, 'chats/pedidoTomado/mensajes/m1'), { texto: 'cambiado' })));
+await check('SÍ se puede adelantar la expiración (borrado al entregar)', () =>
+  assertSucceeds(updateDoc(doc(driverOK, 'chats/pedidoTomado/mensajes/m1'),
+    { expira_en: new Date(Date.now() + 600e3) })));
+await check('Un participante SÍ puede borrar la conversación', () =>
+  assertSucceeds(deleteDoc(doc(driverOK, 'chats/pedidoTomado/mensajes/m2'))));
 
 console.log('\n=== 6. Recargas de saldo ===');
 await check('Domiciliario NO puede crear una recarga ya aprobada', () =>
