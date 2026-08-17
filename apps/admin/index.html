@@ -282,6 +282,63 @@
         <div id="autorizados-feed" class="space-y-2 pt-1"></div>
       </div>
 
+      <!-- ============================================================
+           CÓDIGOS PROMOCIONALES
+           Cada código sirve UNA sola vez. Una vez canjeado queda quemado
+           para siempre: ni tú puedes reutilizarlo. Eso lo garantizan las
+           reglas de la base de datos, no la pantalla.
+           ============================================================ -->
+      <div class="glass-card rounded-2xl p-4 border border-purple-500/30 space-y-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+            <i class="fa-solid fa-gift text-purple-400"></i> Códigos Promocionales
+          </h3>
+          <span id="promo-contador" class="text-[10px] font-bold text-purple-300 bg-purple-950 px-2 py-0.5 rounded-full border border-purple-800">0 sin usar</span>
+        </div>
+
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Crea un código y entrégaselo al domiciliario. Él lo escribe en su app y
+          te llega la solicitud para aprobar. <strong class="text-purple-300">Cada código
+          se puede usar una sola vez</strong> y cada domiciliario puede canjear uno por mes.
+        </p>
+
+        <form onsubmit="handleCrearPromo(event)" class="space-y-3 text-xs">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Código</label>
+              <div class="flex gap-1.5">
+                <input type="text" id="promo-nuevo-codigo" required placeholder="UBAVOY10" maxlength="24"
+                  oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"
+                  class="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono tracking-wider outline-none focus:border-purple-500">
+                <button type="button" onclick="generarCodigoPromo()" title="Generar uno al azar"
+                  class="px-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 shrink-0">
+                  <i class="fa-solid fa-dice"></i>
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Domicilios que regala</label>
+              <select id="promo-nuevo-cantidad"
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-purple-500">
+                <option value="10">10 domicilios</option>
+                <option value="20">20 domicilios</option>
+                <option value="50">50 domicilios</option>
+                <option value="5">5 domicilios</option>
+              </select>
+            </div>
+          </div>
+
+          <input type="text" id="promo-nueva-nota" placeholder="Para qué es (ej: primeros domiciliarios de prueba)"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-purple-500">
+
+          <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2">
+            <i class="fa-solid fa-plus"></i> Crear código
+          </button>
+        </form>
+
+        <div id="promo-feed" class="space-y-2 pt-1"></div>
+      </div>
+
       <!-- SECTOR GRÁFICOS CHART.JS -->
       <div class="space-y-4">
         <!-- 1. GRÁFICO DE DONA: DISTRIBUCIÓN DE ESTADOS -->
@@ -487,6 +544,7 @@
       dashboardIniciado = true;
 
       renderAutorizadosList();
+      renderPromosList();
       renderAdminDriversList();
       loadAdminStatsFromAPIAndFirestore();
       subscribeRealtimeAdminOrders();
@@ -606,6 +664,117 @@
         console.error('Error leyendo autorizados:', err);
         feed.innerHTML = `<p class="text-[11px] text-rose-300 py-2">No se pudo leer la lista: ${escapeHtml(err.code || err.message)}</p>`;
       });
+    }
+
+    // ============================================================
+    // CÓDIGOS PROMOCIONALES
+    // ============================================================
+    let unsubPromos = null;
+
+    function generarCodigoPromo() {
+      // Sin letras ni números que se confundan al dictarlos (O/0, I/1).
+      const abc = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+      let c = 'UBA';
+      for (let i = 0; i < 5; i++) c += abc[Math.floor(Math.random() * abc.length)];
+      document.getElementById('promo-nuevo-codigo').value = c;
+    }
+
+    async function handleCrearPromo(e) {
+      e.preventDefault();
+      const codigo = document.getElementById('promo-nuevo-codigo').value.trim().toUpperCase();
+      const domicilios = parseInt(document.getElementById('promo-nuevo-cantidad').value, 10);
+      const nota = document.getElementById('promo-nueva-nota').value.trim();
+
+      if (!codigo || codigo.length < 4) {
+        showToast('El código debe tener al menos 4 caracteres', 'error');
+        return;
+      }
+
+      try {
+        const yaExiste = await db.collection('promociones').doc(codigo).get();
+        if (yaExiste.exists) {
+          showToast('Ese código ya existe. Usa otro o genera uno al azar.', 'error');
+          return;
+        }
+
+        await db.collection('promociones').doc(codigo).set({
+          codigo: codigo,
+          domicilios: domicilios,
+          activo: true,
+          usado_por: null,
+          usado_en: null,
+          nota: nota,
+          creado_en: new Date().toISOString()
+        });
+
+        e.target.reset();
+        showToast(`Código ${codigo} creado: ${domicilios} domicilios`);
+      } catch (err) {
+        console.error('Error creando el código:', err);
+        showToast('No se pudo crear: ' + (err.code || err.message), 'error');
+      }
+    }
+
+    function renderPromosList() {
+      const feed = document.getElementById('promo-feed');
+      const contador = document.getElementById('promo-contador');
+      if (!feed) return;
+
+      if (unsubPromos) { try { unsubPromos(); } catch (e) {} }
+
+      unsubPromos = db.collection('promociones').onSnapshot((snap) => {
+        const filas = [];
+        snap.forEach(d => filas.push({ id: d.id, ...d.data() }));
+        // Primero los disponibles, luego los ya entregados.
+        filas.sort((a, b) => (a.usado_por ? 1 : 0) - (b.usado_por ? 1 : 0));
+
+        const libres = filas.filter(f => !f.usado_por && f.activo).length;
+        if (contador) contador.innerText = `${libres} sin usar`;
+
+        if (!filas.length) {
+          feed.innerHTML = `<p class="text-[11px] text-slate-500 text-center py-3">
+            Todavía no has creado códigos promocionales.</p>`;
+          return;
+        }
+
+        feed.innerHTML = filas.map(f => {
+          const usado = !!f.usado_por;
+          return `
+            <div class="flex items-center justify-between gap-2 bg-slate-900/70 border ${usado ? 'border-slate-700' : 'border-purple-700/50'} rounded-xl px-3 py-2">
+              <div class="min-w-0">
+                <p class="font-mono font-bold text-xs ${usado ? 'text-slate-500 line-through' : 'text-purple-300'} tracking-wider truncate">
+                  ${escapeHtml(f.id)}
+                </p>
+                <p class="text-[10px] text-slate-400 truncate">
+                  ${f.domicilios} domicilios${f.nota ? ' · ' + escapeHtml(f.nota) : ''}
+                </p>
+                ${usado ? `<p class="text-[9px] text-emerald-500 truncate">
+                  Entregado a ${escapeHtml(f.usado_por_nombre || f.usado_por)} · ${escapeHtml(fechaLegibleAdmin(f.usado_en))}
+                </p>` : ''}
+              </div>
+              ${usado
+                ? `<span class="shrink-0 text-[9px] font-bold uppercase text-slate-500 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700">Usado</span>`
+                : `<button onclick="alternarPromo('${escapeHtml(f.id)}', ${f.activo === true})"
+                     class="shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold ${f.activo
+                       ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                       : 'bg-slate-800 text-slate-400 border border-slate-600'}">
+                     ${f.activo ? 'Activo' : 'Inactivo'}
+                   </button>`}
+            </div>`;
+        }).join('');
+      }, (err) => {
+        console.error('Error leyendo promociones:', err);
+        feed.innerHTML = `<p class="text-[11px] text-rose-300 py-2">No se pudo leer: ${escapeHtml(err.code || err.message)}</p>`;
+      });
+    }
+
+    async function alternarPromo(codigo, estabaActivo) {
+      try {
+        await db.collection('promociones').doc(codigo).update({ activo: !estabaActivo });
+        showToast(!estabaActivo ? 'Código activado' : 'Código desactivado');
+      } catch (e) {
+        showToast('No se pudo cambiar: ' + (e.code || e.message), 'error');
+      }
     }
 
     async function cambiarHabilitacion(correo, estabaActivo) {
@@ -841,8 +1010,49 @@
       const cantidadServicios = Number(servicios) || Math.floor(monto / COSTO_CARRERA_ADMIN);
 
       try {
+        const refSolicitud = db.collection('recharges').doc(rechargeId);
+        const solicitud = await refSolicitud.get();
+        const datos = solicitud.exists ? solicitud.data() : {};
+        const codigoPromo = datos.codigo_promo || null;
+
+        // Si es un canje promocional, el código se quema EN EL MISMO lote que
+        // acredita el saldo. Si el código ya estaba usado, las reglas rechazan
+        // todo el lote y no se acredita nada: no hay forma de regalar dos
+        // veces el mismo código, ni por error ni a propósito.
+        if (codigoPromo) {
+          const refCodigo = db.collection('promociones').doc(codigoPromo);
+          const codigo = await refCodigo.get();
+
+          if (!codigo.exists) {
+            showToast(`El código ${codigoPromo} ya no existe`, 'error');
+            return;
+          }
+          if (codigo.data().usado_por) {
+            showToast(`El código ${codigoPromo} ya fue usado por otra persona. No se acreditó nada.`, 'error');
+            return;
+          }
+
+          const lote = db.batch();
+          lote.update(refCodigo, {
+            usado_por: driverId,
+            usado_por_nombre: datos.driver_name || driverEmail || driverId,
+            usado_en: new Date().toISOString(),
+            domicilios: codigo.data().domicilios
+          });
+          lote.update(refSolicitud, { status: 'approved', approved_at: new Date().toISOString() });
+          lote.update(db.collection('users').doc(driverId), {
+            balance: firebase.firestore.FieldValue.increment(monto),
+            ultimo_paquete_servicios: cantidadServicios,
+            last_recharge_at: new Date().toISOString()
+          });
+          await lote.commit();
+
+          showToast(`Código ${codigoPromo} entregado: ${cantidadServicios} domicilios de cortesía`);
+          return;
+        }
+
         const lote = db.batch();
-        lote.update(db.collection('recharges').doc(rechargeId), {
+        lote.update(refSolicitud, {
           status: 'approved',
           approved_at: new Date().toISOString()
         });

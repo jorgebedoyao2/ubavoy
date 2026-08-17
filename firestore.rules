@@ -364,6 +364,53 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // promociones/{codigo}  - códigos promocionales de un solo uso
+    // =========================================================================
+    // El ID del documento ES el código en mayúsculas (ej. UBAVOY10).
+    //
+    // Por qué el domiciliario NO se acredita el saldo solo: las reglas no
+    // pueden validar en un solo paso "consume el código Y súbete el saldo",
+    // así que dos intentos simultáneos podrían colarse. En vez de eso el
+    // domiciliario solo CANJEA (crea una solicitud) y el administrador
+    // aprueba, igual que con las recargas de Nequi.
+    //
+    // La garantía de un solo uso vive en la regla de update: una vez que el
+    // código tiene 'usado_por', NINGUNA escritura puede volver a tomarlo, ni
+    // siquiera la del administrador. Es irreversible por diseño.
+    match /promociones/{codigo} {
+
+      // Cualquiera con sesión puede consultar un código puntual para saber si
+      // sirve, pero NO puede listarlos: hay que conocer el código exacto.
+      allow get: if estaLogueado();
+      allow list: if esAdmin();
+
+      allow create: if esAdmin()
+                    && request.resource.data.domicilios is int
+                    && request.resource.data.domicilios > 0
+                    && request.resource.data.domicilios <= 100
+                    && request.resource.data.get('usado_por', null) == null;
+
+      // Consumir el código: solo si sigue libre. Después de esto queda
+      // quemado para siempre.
+      function consumeElCodigo() {
+        return esAdmin()
+               && resource.data.get('usado_por', null) == null
+               && request.resource.data.usado_por is string
+               && request.resource.data.domicilios == resource.data.domicilios;
+      }
+
+      // Activar o desactivar un código que todavía nadie usó.
+      function ajustaElCodigo() {
+        return esAdmin()
+               && resource.data.get('usado_por', null) == null
+               && soloCambia(['activo']);
+      }
+
+      allow update: if consumeElCodigo() || ajustaElCodigo();
+      allow delete: if esAdmin() && resource.data.get('usado_por', null) == null;
+    }
+
+    // =========================================================================
     // autorizados/{correo}  - lista blanca de domiciliarios habilitados
     // =========================================================================
     // El ID del documento ES el correo en minúsculas. Solo el administrador

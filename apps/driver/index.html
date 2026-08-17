@@ -421,6 +421,26 @@
             <p class="text-slate-400"><strong>Titular:</strong> Central UbaVoy Ubaté</p>
           </div>
 
+          <!-- ============ CÓDIGO PROMOCIONAL ============ -->
+          <div class="bg-purple-950/40 border border-purple-700/60 rounded-xl p-3 space-y-2">
+            <label class="block font-semibold text-purple-200 text-xs">
+              <i class="fa-solid fa-gift mr-1"></i> ¿Tienes un código promocional?
+            </label>
+            <div class="flex gap-2">
+              <input type="text" id="promo-codigo" placeholder="Ej: UBAVOY10" maxlength="24"
+                oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"
+                class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono tracking-wider outline-none focus:border-purple-500">
+              <button type="button" onclick="validarCodigoPromo()"
+                class="px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shrink-0">
+                Validar
+              </button>
+            </div>
+            <p id="promo-resultado" class="hidden text-[11px] leading-snug"></p>
+            <p class="text-[10px] text-slate-500">
+              Cada código sirve una sola vez. Al validarlo se envía al administrador para que lo apruebe.
+            </p>
+          </div>
+
           <!-- ============ CAPTURA DEL COMPROBANTE ============ -->
           <div class="space-y-2">
             <label class="block font-semibold text-slate-200">Captura del pago (obligatoria)</label>
@@ -1374,6 +1394,91 @@
       showToast(`Perfil guardado, ${name}`);
     }
 
+    // ============ CÓDIGOS PROMOCIONALES ============
+    // El domiciliario NO se acredita el saldo solo: canjear crea una
+    // solicitud que el administrador aprueba, igual que una recarga de Nequi.
+    // Es lo único seguro sin un servidor propio, y además te deja ver todo lo
+    // que se está regalando antes de que ocurra.
+    let promoValidado = null;
+
+    async function validarCodigoPromo() {
+      const campo = document.getElementById('promo-codigo');
+      const salida = document.getElementById('promo-resultado');
+      const codigo = (campo.value || '').trim().toUpperCase();
+
+      const mostrar = (texto, tipo) => {
+        salida.innerText = texto;
+        salida.className = 'text-[11px] leading-snug font-semibold ' +
+          (tipo === 'ok' ? 'text-emerald-400' : tipo === 'aviso' ? 'text-amber-400' : 'text-rose-400');
+        salida.classList.remove('hidden');
+      };
+
+      promoValidado = null;
+
+      if (!codigo) { mostrar('Escribe el código que te dieron.', 'error'); return; }
+      if (!currentDriver.uid) { mostrar('Inicia sesión para canjear un código.', 'error'); return; }
+
+      try {
+        const snap = await db.collection('promociones').doc(codigo).get();
+
+        if (!snap.exists) { mostrar('Ese código no existe. Revisa que esté bien escrito.', 'error'); return; }
+
+        const p = snap.data();
+        if (p.usado_por) { mostrar('Este código ya fue usado. Cada código sirve una sola vez.', 'error'); return; }
+        if (p.activo !== true) { mostrar('Este código está desactivado.', 'error'); return; }
+
+        // Un canje por mes: se revisa si ya hay uno de este mes.
+        const inicioMes = new Date();
+        inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
+        const previos = await db.collection('recharges')
+          .where('driver_id', '==', currentDriver.uid)
+          .where('tipo', '==', 'promocion')
+          .get();
+
+        const yaEsteMes = previos.docs.some(d => {
+          const f = new Date(d.data().created_at || 0);
+          return !isNaN(f.getTime()) && f >= inicioMes && d.data().status !== 'rejected';
+        });
+
+        if (yaEsteMes) {
+          mostrar('Ya canjeaste un código promocional este mes. Puedes usar otro el mes entrante.', 'aviso');
+          return;
+        }
+
+        promoValidado = { codigo: codigo, domicilios: Number(p.domicilios) || 0 };
+        mostrar(`Código válido: ${promoValidado.domicilios} domicilios de cortesía. Presiona enviar para solicitarlo.`, 'ok');
+
+      } catch (e) {
+        console.error('Error validando el código:', e);
+        mostrar('No se pudo validar: ' + (e.code || e.message), 'error');
+      }
+    }
+
+    async function enviarCanjePromocional() {
+      if (!promoValidado) return false;
+
+      const monto = promoValidado.domicilios * COSTO_CARRERA;
+      await db.collection('recharges').add({
+        driver_id: currentDriver.uid,
+        driver_email: currentDriver.email || '',
+        driver_name: currentDriver.name || 'Domiciliario UbaVoy',
+        amount: monto,
+        servicios: promoValidado.domicilios,
+        package_name: `🎁 ${promoValidado.domicilios} domicilios promocionales`,
+        tipo: 'promocion',
+        codigo_promo: promoValidado.codigo,
+        receipt_ref: 'CÓDIGO ' + promoValidado.codigo,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      });
+
+      showToast(`Código ${promoValidado.codigo} enviado. El administrador lo aprobará pronto.`);
+      promoValidado = null;
+      document.getElementById('promo-codigo').value = '';
+      document.getElementById('promo-resultado').classList.add('hidden');
+      return true;
+    }
+
     // ============ CAPTURA DEL COMPROBANTE DE PAGO ============
     // La foto se comprime en el celular ANTES de enviarla. Un documento de
     // Firestore no puede pasar de 1 MB, y una captura de pantalla moderna pesa
@@ -1460,8 +1565,22 @@
         showToast('Inicia sesión para pedir una recarga', 'error');
         return;
       }
+
+      // Un canje promocional no necesita comprobante de pago: el código ES el
+      // comprobante. Se envía y se termina aquí.
+      if (promoValidado) {
+        try {
+          await enviarCanjePromocional();
+          closeRechargeModal();
+        } catch (err) {
+          console.error('Error enviando el canje:', err);
+          showToast('No se pudo enviar el código: ' + (err.code || err.message), 'error');
+        }
+        return;
+      }
+
       if (!capturaComprobante) {
-        showToast('Adjunta la captura del pago para que el administrador pueda verificarlo', 'error');
+        showToast('Adjunta la captura del pago, o valida un código promocional', 'error');
         return;
       }
 

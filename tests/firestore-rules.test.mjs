@@ -228,6 +228,53 @@ await check('Domiciliario NO puede cambiar el PIN de entrega', () =>
 await check('Cliente SÍ puede leer la ubicación de su domiciliario', () =>
   assertSucceeds(getDoc(doc(cliente1, 'orders/pedidoTomado'))));
 
+console.log('\n=== 8. Códigos promocionales de un solo uso ===');
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const d = ctx.firestore();
+  await setDoc(doc(d, 'promociones/PROMOLIBRE'), {
+    codigo: 'PROMOLIBRE', domicilios: 10, activo: true, usado_por: null,
+  });
+  await setDoc(doc(d, 'promociones/PROMOQUEMADA'), {
+    codigo: 'PROMOQUEMADA', domicilios: 10, activo: true,
+    usado_por: 'driverPobre', usado_en: '2026-08-16T10:00:00Z',
+  });
+});
+
+await check('El domiciliario SÍ puede consultar un código que conoce', () =>
+  assertSucceeds(getDoc(doc(driverOK, 'promociones/PROMOLIBRE'))));
+await check('El domiciliario NO puede listar todos los códigos', () =>
+  assertFails(getDocs(collection(driverOK, 'promociones'))));
+await check('El domiciliario NO puede crear códigos', () =>
+  assertFails(setDoc(doc(driverOK, 'promociones/INVENTADO'),
+    { codigo: 'INVENTADO', domicilios: 50, activo: true, usado_por: null })));
+await check('El domiciliario NO puede quemar un código a su favor', () =>
+  assertFails(updateDoc(doc(driverOK, 'promociones/PROMOLIBRE'),
+    { usado_por: 'driverOK' })));
+await check('El domiciliario NO puede subirle los domicilios a un código', () =>
+  assertFails(updateDoc(doc(driverOK, 'promociones/PROMOLIBRE'), { domicilios: 100 })));
+
+await check('El admin SÍ puede crear un código', () =>
+  assertSucceeds(setDoc(doc(dueno, 'promociones/BIENVENIDA20'),
+    { codigo: 'BIENVENIDA20', domicilios: 20, activo: true, usado_por: null })));
+await check('El admin SÍ puede consumir un código libre', () =>
+  assertSucceeds(updateDoc(doc(dueno, 'promociones/PROMOLIBRE'),
+    { usado_por: 'driverOK', usado_en: '2026-08-17T10:00:00Z', domicilios: 10 })));
+
+console.log('   -- La garantía del uso único --');
+await check('NADIE puede volver a usar un código ya quemado, ni el admin', () =>
+  assertFails(updateDoc(doc(dueno, 'promociones/PROMOQUEMADA'),
+    { usado_por: 'driverOK', domicilios: 10 })));
+await check('Un código quemado tampoco se puede reactivar', () =>
+  assertFails(updateDoc(doc(dueno, 'promociones/PROMOQUEMADA'), { activo: true })));
+await check('Un código quemado no se puede borrar para reciclarlo', () =>
+  assertFails(deleteDoc(doc(dueno, 'promociones/PROMOQUEMADA'))));
+await check('El admin NO puede crear un código ya marcado como usado', () =>
+  assertFails(setDoc(doc(dueno, 'promociones/TRAMPA'),
+    { codigo: 'TRAMPA', domicilios: 10, activo: true, usado_por: 'driverOK' })));
+await check('El admin NO puede crear un código de 500 domicilios', () =>
+  assertFails(setDoc(doc(dueno, 'promociones/ENORME'),
+    { codigo: 'ENORME', domicilios: 500, activo: true, usado_por: null })));
+
 console.log('\n=== 7. Chat interno y efímero ===');
 await testEnv.withSecurityRulesDisabled(async (ctx) => {
   const d = ctx.firestore();
