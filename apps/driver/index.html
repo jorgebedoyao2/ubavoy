@@ -6,7 +6,7 @@
   <title>UbaVoy - App Domiciliario Exprés</title>
   
   <!-- PWA Metadata & Theme -->
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="/apps/driver/manifest.json">
   <meta name="theme-color" content="#f59e0b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -273,15 +273,12 @@
           </button>
         </div>
 
-        <div class="grid grid-cols-2 gap-2 pt-1">
-          <button onclick="forceReloadOrdersDiagnostic()" class="py-2 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] font-bold flex items-center justify-center gap-1 transition-all border border-slate-700">
-            <i class="fa-solid fa-magnifying-glass"></i> Diagnóstico (Count)
-          </button>
-          
-          <button onclick="createTestOrderInFirestore()" class="py-2 px-2.5 rounded-xl bg-emerald-950 hover:bg-emerald-900 text-emerald-400 text-[10px] font-bold flex items-center justify-center gap-1 transition-all border border-emerald-800">
-            <i class="fa-solid fa-flask"></i> 🧪 Pedido de Prueba
-          </button>
-        </div>
+        <!-- Las herramientas de prueba (diagnóstico y pedido de prueba) se
+             retiran de la pantalla: la app ya está en manos de domiciliarios
+             reales y esos botones ensuciaban la bolsa de carreras con pedidos
+             falsos. Las funciones siguen disponibles desde la consola del
+             navegador para depurar: forceReloadOrdersDiagnostic() y
+             createTestOrderInFirestore(). -->
       </div>
 
       <!-- MIS CARRERAS ACTIVAS EN CURSO (VALIDACIÓN CON PIN) -->
@@ -2495,7 +2492,7 @@
 
     function registerServiceWorker() {
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').catch(() => {});
+        navigator.serviceWorker.register('/apps/driver/sw.js', { scope: '/apps/driver/' }).catch(() => {});
       }
     }
 

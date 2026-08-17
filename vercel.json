@@ -7,14 +7,17 @@
     { "src": "public/**/*", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/driver", "dest": "/apps/driver/index.html" },
-    { "src": "/driver/(.*)", "dest": "/apps/driver/$1" },
-    { "src": "/admin", "dest": "/apps/admin/index.html" },
-    { "src": "/admin/(.*)", "dest": "/apps/admin/$1" },
-    { "src": "/shared/(.*)", "dest": "/shared/$1" },
     { "src": "/api/(.*)", "dest": "/api/index.py" },
+    { "src": "/shared/(.*)", "dest": "/shared/$1" },
     { "src": "/(icon-[^/]+\\.(?:svg|png))", "dest": "/public/$1" },
     { "src": "/(favicon\\.ico)", "dest": "/public/$1" },
+
+    { "src": "/driver/?$", "status": 308, "headers": { "Location": "/apps/driver/" } },
+    { "src": "/admin/?$", "status": 308, "headers": { "Location": "/apps/admin/" } },
+    { "src": "/cliente/?$", "status": 308, "headers": { "Location": "/apps/client/" } },
+    { "src": "/$", "status": 308, "headers": { "Location": "/apps/client/" } },
+
+    { "src": "/apps/(.*)", "dest": "/apps/$1" },
     { "src": "/(.*)", "dest": "/apps/client/$1" }
   ]
 }

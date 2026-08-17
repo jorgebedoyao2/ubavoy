@@ -6,7 +6,7 @@
   <title>UbaVoy - Pedir Domicilio y Mandado Exprés</title>
   
   <!-- PWA Metadata & Theme -->
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="/apps/client/manifest.json">
   <meta name="theme-color" content="#059669">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1238,7 +1238,7 @@
 
     function registerServiceWorker() {
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').catch(() => {});
+        navigator.serviceWorker.register('/apps/client/sw.js', { scope: '/apps/client/' }).catch(() => {});
       }
     }
 
