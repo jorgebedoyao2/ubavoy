@@ -1,138 +1,138 @@
-from fastapi import FastAPI, HTTPException, status
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from datetime import datetime
-from typing import Optional, Dict
+"""
+UbaVoy - Backend serverless
+=============================================================================
+Sirve el informe de operación en Python, leyendo Firestore desde el servidor.
 
-# Adaptador para Vercel Serverless
+Cambio importante frente a la versión anterior: los endpoints devolvían
+números fijos escritos a mano (12 pedidos, saldo simulado) que nadie usaba y
+que daban una falsa sensación de tener métricas. Ahora todo sale de datos
+reales o dice claramente que no hay datos.
+"""
+
+from datetime import datetime, timezone
+
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
+
 try:
     from mangum import Mangum
 except ImportError:
     Mangum = None
 
+# Correo del dueño de la plataforma. Debe coincidir con firestore.rules.
+CORREO_ADMIN = 'devsites02@gmail.com'
+
 app = FastAPI(
     title="UbaVoy API",
-    description="Backend Serverless para la plataforma de domicilios y mandados UbaVoy (Ubaté, Cundinamarca)",
-    version="3.0.0",
+    description="Backend serverless de UbaVoy (Ubaté, Cundinamarca)",
+    version="4.0.0",
     docs_url="/api/docs",
-    openapi_url="/api/openapi.json"
+    openapi_url="/api/openapi.json",
 )
 
-# Configuración de CORS
+# El informe se abre desde el panel de administración, que vive en el mismo
+# dominio. No se permite cualquier origen: este backend expone datos del
+# negocio, y antes estaba abierto a todo internet con credenciales activadas.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://ubavoy.vercel.app",
+        "http://localhost:3900",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
-# Modelos Pydantic
-class RechargeRequest(BaseModel):
-    driverId: str = Field(..., description="ID o celular del domiciliario")
-    driverName: Optional[str] = Field("Domiciliario UbaVoy", description="Nombre del domiciliario")
-    amount: float = Field(..., gt=0, description="Monto en COP a recargar")
-    paymentRef: Optional[str] = Field(None, description="Número de referencia Nequi")
 
-class RechargeResponse(BaseModel):
-    status: str
-    message: str
-    driverId: str
-    amount: float
-    newBalanceSimulated: float
-    reference: str
-    timestamp: str
+def _token_de(cabecera: str | None) -> str:
+    if not cabecera:
+        return ''
+    return cabecera[7:].strip() if cabecera.lower().startswith('bearer ') else cabecera.strip()
 
-class HealthResponse(BaseModel):
-    status: str
-    app: str
-    city: str
-    coordinates: dict
-    commissionPerOrderCOP: int
-    timestamp: str
 
-class AdminStatsResponse(BaseModel):
-    status: str
-    total_orders: int
-    completed_orders: int
-    total_revenue: float
-    platform_commissions: float
-    orders_by_status: Dict[str, int]
-    city: str
-    timestamp: str
-
-# Endpoints
-@app.get("/api/health", response_model=HealthResponse)
-def health_check():
-    """Endpoint de diagnóstico de salud del servidor Backend"""
-    return HealthResponse(
-        status="ok",
-        app="UbaVoy API Serverless v3.0",
-        city="Ubaté, Cundinamarca",
-        coordinates={"lat": 5.3081, "lng": -73.8144},
-        commissionPerOrderCOP=500,
-        timestamp=datetime.utcnow().isoformat() + "Z"
-    )
-
-@app.post("/api/drivers/recharge", response_model=RechargeResponse, status_code=status.HTTP_200_OK)
-def recharge_driver_balance(payload: RechargeRequest):
-    """Endpoint para recarga de saldo prepago de domiciliarios"""
-    if payload.amount < 1000:
-        raise HTTPException(
-            status_code=400, 
-            detail="El monto mínimo de recarga es de $1,000 COP"
-        )
-
-    ref = payload.paymentRef or f"UB-NQ-{int(datetime.utcnow().timestamp())}"
-    simulated_new_balance = 10000.0 + payload.amount
-
-    return RechargeResponse(
-        status="success",
-        message=f"Recarga de ${payload.amount:,.0f} COP aprobada exitosamente para {payload.driverName}.",
-        driverId=payload.driverId,
-        amount=payload.amount,
-        newBalanceSimulated=simulated_new_balance,
-        reference=ref,
-        timestamp=datetime.utcnow().isoformat() + "Z"
-    )
-
-@app.get("/api/admin/stats", response_model=AdminStatsResponse)
-def get_admin_stats():
-    """Endpoint de Estadísticas y Métricas Generales del Dashboard Administrativo de UbaVoy"""
-    total_orders = 12
-    completed_orders = 8
-    total_revenue = 64000.0
-    commissions = total_orders * 500.0
-
-    return AdminStatsResponse(
-        status="success",
-        total_orders=total_orders,
-        completed_orders=completed_orders,
-        total_revenue=total_revenue,
-        platform_commissions=commissions,
-        orders_by_status={
-            "pending": 2,
-            "assigned": 2,
-            "completed": 8,
-            "cancelled": 0
-        },
-        city="Ubaté, Cundinamarca",
-        timestamp=datetime.utcnow().isoformat() + "Z"
-    )
-
-@app.get("/api/info")
-def platform_info():
-    """Información general sobre UbaVoy"""
+@app.get("/api/health")
+def salud():
+    """Diagnóstico rápido del backend."""
+    from api import analitica  # import perezoso: acelera el arranque en frío
     return {
-        "platform": "UbaVoy Ubaté",
-        "version": "3.0.0",
-        "city": "Ubaté, Cundinamarca",
-        "centerCoordinates": {"lat": 5.3081, "lng": -73.8144},
-        "driverCommissionCOP": 500,
-        "nequiNumber": "3100000000",
-        "supportWhatsApp": "573100000000",
-        "status": "active"
+        "estado": "ok",
+        "servicio": "UbaVoy API v4",
+        "ciudad": "Ubaté, Cundinamarca",
+        "comision_por_carrera": analitica.COMISION_POR_CARRERA,
+        "base_de_datos": "conectada" if analitica.obtener_firestore() else "sin credenciales",
+        "momento": datetime.now(timezone.utc).isoformat(),
     }
 
-# Handler para Vercel Serverless
+
+@app.get("/api/dashboard", response_class=HTMLResponse)
+def dashboard(authorization: str | None = Header(default=None)):
+    """
+    Informe completo de la operación, en HTML.
+
+    Requiere la sesión de Google del administrador: el token se verifica
+    contra Firebase en el servidor, no basta con decir que se es admin.
+    """
+    from api import analitica, graficas, panel
+
+    if analitica.obtener_firestore() is None:
+        return HTMLResponse(panel.sin_credenciales(), status_code=200)
+
+    ok, detalle = analitica.verificar_administrador(_token_de(authorization), CORREO_ADMIN)
+    if not ok:
+        raise HTTPException(status_code=401, detail=detalle)
+
+    datos = analitica.cargar_datos()
+    if datos is None or datos['pedidos'].empty:
+        return HTMLResponse(panel.sin_datos(), status_code=200)
+
+    indicadores = analitica.calcular(datos)
+    series = analitica.series_temporales(datos['pedidos'])
+
+    figuras = {
+        'dia': graficas.pedidos_por_dia(series),
+        'hora': graficas.pedidos_por_hora(series),
+        'calor': graficas.mapa_calor(series),
+        'tiempos': graficas.tiempos(series),
+        'mapa': graficas.mapa_entregas(series),
+        'embudo': graficas.embudo(indicadores),
+        'ranking': graficas.ranking_domiciliarios(indicadores),
+    }
+
+    return HTMLResponse(panel.construir(indicadores, figuras))
+
+
+@app.get("/api/metricas")
+def metricas(authorization: str | None = Header(default=None)):
+    """Los mismos indicadores en JSON, para hojas de cálculo o presentaciones."""
+    from api import analitica
+
+    if analitica.obtener_firestore() is None:
+        return JSONResponse({"error": "El servidor no tiene credenciales configuradas"}, status_code=503)
+
+    ok, detalle = analitica.verificar_administrador(_token_de(authorization), CORREO_ADMIN)
+    if not ok:
+        raise HTTPException(status_code=401, detail=detalle)
+
+    datos = analitica.cargar_datos()
+    if datos is None:
+        return JSONResponse({"error": "No se pudo leer la base de datos"}, status_code=500)
+
+    return analitica.calcular(datos)
+
+
+@app.get("/api/info")
+def info():
+    from api import analitica
+    return {
+        "plataforma": "UbaVoy Ubaté",
+        "version": "4.0.0",
+        "ciudad": "Ubaté, Cundinamarca",
+        "centro": {"lat": 5.3081, "lng": -73.8144},
+        "comision_por_carrera": analitica.COMISION_POR_CARRERA,
+        "estado": "activo",
+    }
+
+
 handler = Mangum(app) if Mangum else app

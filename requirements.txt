@@ -1,5 +1,6 @@
 fastapi==0.110.0
-uvicorn==0.28.0
 mangum==0.17.0
 pydantic==2.6.4
 firebase-admin==6.5.0
+pandas==2.2.1
+plotly==5.20.0

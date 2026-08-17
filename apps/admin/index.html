@@ -160,8 +160,8 @@
           <h2 class="font-display font-bold text-sm text-white flex items-center gap-2">
             <i class="fa-solid fa-chart-pie text-purple-400"></i> KPI Métricas Consolidadas
           </h2>
-          <button onclick="loadAdminStatsFromAPIAndFirestore()" class="text-xs text-purple-400 font-bold hover:text-purple-300 flex items-center gap-1">
-            <i class="fa-solid fa-rotate"></i> Refrescar API
+          <button onclick="abrirInformePython()" class="text-xs text-purple-300 font-bold hover:text-purple-200 flex items-center gap-1.5 bg-purple-950/70 border border-purple-700 px-2.5 py-1 rounded-lg">
+            <i class="fa-solid fa-chart-line"></i> Informe completo
           </button>
         </div>
 
@@ -1163,6 +1163,46 @@
      * saldo se suma con increment(), que resuelve el servidor.
      */
     const COSTO_CARRERA_ADMIN = 1000;  // debe coincidir con la app y las reglas
+
+    /**
+     * Abre el informe completo, que genera el backend en Python.
+     *
+     * La sesión viaja en la cabecera y no en la dirección: un token en la URL
+     * queda guardado en el historial del navegador y en los registros del
+     * servidor. Por eso se pide con fetch y se abre el resultado en una
+     * pestaña nueva.
+     */
+    async function abrirInformePython() {
+      const usuario = auth.currentUser;
+      if (!usuario) {
+        showToast('Tu sesión expiró. Vuelve a entrar.', 'error');
+        return;
+      }
+
+      showToast('Generando el informe...');
+      try {
+        const token = await usuario.getIdToken();
+        const r = await fetch('/api/dashboard', { headers: { Authorization: 'Bearer ' + token } });
+
+        if (!r.ok) {
+          const detalle = await r.text();
+          showToast(`No se pudo abrir el informe (${r.status}). ${detalle.slice(0, 90)}`, 'error');
+          return;
+        }
+
+        const html = await r.blob();
+        const url = URL.createObjectURL(html);
+        const ventana = window.open(url, '_blank');
+        if (!ventana) {
+          showToast('Tu navegador bloqueó la ventana. Permite las ventanas emergentes.', 'warning');
+        }
+        // Se libera después de que la pestaña alcanzó a cargarlo.
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (e) {
+        console.error('Error abriendo el informe:', e);
+        showToast('No se pudo generar el informe: ' + e.message, 'error');
+      }
+    }
 
     /**
      * Borra los pedidos marcados como prueba. Solo toca los que dicen
