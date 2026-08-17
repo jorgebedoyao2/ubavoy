@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ubavoy-client-v9.0.0';
+const CACHE_NAME = 'ubavoy-client-v9.1.0';
 const ASSETS = [
   '/apps/client/',
   '/apps/client/index.html',

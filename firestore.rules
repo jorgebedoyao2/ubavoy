@@ -233,8 +233,11 @@ service cloud.firestore {
 
       allow update: if tomaLaCarrera() || avanzaSuCarrera() || cancelaSuPedido() || esAdmin();
 
-      // Los pedidos no se borran: son el historial contable del negocio.
-      allow delete: if false;
+      // Los pedidos son el historial contable del negocio, así que ni el
+      // cliente ni el domiciliario pueden borrarlos. El administrador sí,
+      // porque necesita poder limpiar los pedidos de prueba de la etapa de
+      // pruebas; para el día a día lo correcto es cancelarlos, no borrarlos.
+      allow delete: if esAdmin();
     }
 
     // =========================================================================

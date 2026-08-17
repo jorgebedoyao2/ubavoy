@@ -938,16 +938,20 @@
           }
         }
 
-        updateStatusBadge(order.status, order);
+        // Cada parte se pinta por separado: si una falla, las demás siguen.
+        // Antes un error aquí tumbaba todo el callback y dejaba el chat sin
+        // activar, sin ninguna señal visible de lo que había pasado.
+        try { updateStatusBadge(order.status, order); }
+        catch (e) { console.error('Fallo pintando el estado:', e); }
 
-        // Mapa en vivo con la posición del domiciliario y avisos que reporte.
-        try {
-          actualizarMapaRastreo(order);
-          mostrarNovedadCliente(order);
-          sincronizarChatConPedido(orderId, order);
-        } catch (errMapa) {
-          console.error('Fallo pintando el rastreo en vivo:', errMapa);
-        }
+        try { actualizarMapaRastreo(order); }
+        catch (e) { console.error('Fallo pintando el rastreo en vivo:', e); }
+
+        try { mostrarNovedadCliente(order); }
+        catch (e) { console.error('Fallo pintando la novedad:', e); }
+
+        try { sincronizarChatConPedido(orderId, order); }
+        catch (e) { console.error('Fallo activando el chat:', e); }
       });
     }
 
@@ -973,9 +977,12 @@
         }
         if (driverCard) {
           driverCard.classList.remove('hidden');
-          document.getElementById('driver-assigned-name').innerText = order.driver_name || 'Carlos Gómez';
-          document.getElementById('driver-assigned-vehicle').innerText = order.driver_vehicle || 'Moto FZ 150';
-          document.getElementById('driver-whatsapp-link').href = `https://wa.me/57${(order.driver_phone || '3100000000').replace(/[^0-9]/g, '')}`;
+          const elNombre = document.getElementById('driver-assigned-name');
+          const elVehiculo = document.getElementById('driver-assigned-vehicle');
+          if (elNombre) elNombre.innerText = order.driver_name || 'Tu domiciliario';
+          if (elVehiculo) elVehiculo.innerText = order.driver_vehicle || 'En camino';
+          // Ya no se arma un enlace de WhatsApp: la conversación ocurre en el
+          // chat interno, sin exponer el teléfono de ninguna de las partes.
         }
       } else if (st === 'completed') {
         if (badge) {

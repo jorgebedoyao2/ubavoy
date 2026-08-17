@@ -2008,10 +2008,9 @@
                   <i class="fa-solid fa-map-location-dot"></i> GPS Navegación
                 </button>
 
-                <a href="https://wa.me/57${clientPhone.replace(/[^0-9]/g, '')}" target="_blank"
-                  class="text-[11px] font-bold text-emerald-400 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800 px-2.5 py-1.5 rounded-xl flex items-center gap-1">
-                  <i class="fa-brands fa-whatsapp"></i> WhatsApp Cliente
-                </a>
+                <span class="text-[10px] text-slate-500 flex items-center gap-1">
+                  <i class="fa-solid fa-comments text-emerald-500"></i> Chat al aceptar
+                </span>
               </div>
 
               <button onclick="acceptOrder('${order.id}')"
@@ -2138,20 +2137,14 @@
             </div>
 
             <div class="text-xs text-slate-300 space-y-1">
-              <p><strong class="text-slate-400">Cliente WhatsApp:</strong> ${escapeHtml(clientPhone)}</p>
               <p><strong class="text-slate-400">Entrega:</strong> ${escapeHtml(addr)}</p>
             </div>
 
-            <div class="pt-2 flex items-center justify-between border-t border-slate-800">
+            <div class="pt-2 border-t border-slate-800">
               <button onclick="abrirNavegacionPedido('${order.id}')"
-                class="text-[11px] font-bold text-sky-400 bg-sky-950 hover:bg-sky-900 border border-sky-800 px-3 py-1.5 rounded-xl flex items-center gap-1">
+                class="w-full text-[11px] font-bold text-sky-400 bg-sky-950 hover:bg-sky-900 border border-sky-800 px-3 py-2 rounded-xl flex items-center justify-center gap-1.5">
                 <i class="fa-solid fa-map-location-dot"></i> GPS Navegación
               </button>
-
-              <a href="https://wa.me/57${clientPhone.replace(/[^0-9]/g, '')}" target="_blank"
-                class="text-[11px] font-bold text-emerald-400 bg-emerald-950 hover:bg-emerald-900 border border-emerald-800 px-3 py-1.5 rounded-xl flex items-center gap-1">
-                <i class="fa-brands fa-whatsapp"></i> 💬 WhatsApp Cliente
-              </a>
             </div>
 
             <div class="grid grid-cols-2 gap-2">
