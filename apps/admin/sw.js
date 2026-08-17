@@ -13,7 +13,7 @@
  *     no llega a instalarse. Paso al reemplazar los iconos .svg por .png.
  */
 
-const CACHE_NAME = 'ubavoy-admin-v4';
+const CACHE_NAME = 'ubavoy-admin-v5';
 
 const RECURSOS = [
   '/apps/admin/',

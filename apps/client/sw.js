@@ -13,7 +13,7 @@
  *     no llega a instalarse. Paso al reemplazar los iconos .svg por .png.
  */
 
-const CACHE_NAME = 'ubavoy-client-v12';
+const CACHE_NAME = 'ubavoy-client-v13';
 
 const RECURSOS = [
   '/apps/client/',

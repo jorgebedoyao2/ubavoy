@@ -14,7 +14,7 @@
  *     el install fallaba y el celular quedaba servido por la versión vieja.
  */
 
-const CACHE_NAME = 'ubavoy-driver-v19';
+const CACHE_NAME = 'ubavoy-driver-v20';
 
 const RECURSOS = [
   '/apps/driver/',
