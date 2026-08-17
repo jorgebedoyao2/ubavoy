@@ -254,6 +254,14 @@
           <div id="driver-aviso-saldo" class="hidden rounded-xl px-3 py-2 border">
             <p id="driver-aviso-texto" class="text-[11px] font-semibold leading-snug"></p>
           </div>
+
+          <!-- Solicitud esperando aprobación del administrador -->
+          <div id="driver-solicitud-pendiente" class="hidden rounded-xl px-3 py-2 border border-sky-700 bg-sky-950/70">
+            <p class="text-[11px] font-semibold text-sky-200 leading-snug">
+              <i class="fa-solid fa-hourglass-half mr-1"></i>
+              <span id="driver-solicitud-texto"></span>
+            </p>
+          </div>
         </div>
 
         <div class="flex items-center justify-between">
@@ -387,7 +395,7 @@
         </div>
 
         <form onsubmit="handleSendRechargeReceipt(event)" class="space-y-3.5 text-xs">
-          <div>
+          <div id="seccion-paquetes-pago">
             <label class="block font-semibold text-slate-200 mb-1">Selecciona tu Paquete:</label>
             <div class="grid grid-cols-1 gap-2">
               <label class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 flex items-center justify-between cursor-pointer hover:border-amber-500/50">
@@ -442,7 +450,7 @@
           </div>
 
           <!-- ============ CAPTURA DEL COMPROBANTE ============ -->
-          <div class="space-y-2">
+          <div id="seccion-comprobante" class="space-y-2">
             <label class="block font-semibold text-slate-200">Captura del pago (obligatoria)</label>
             <p class="text-[10px] text-slate-500 leading-snug">
               Toma o adjunta la pantalla donde se ve el valor, la fecha y el número de referencia.
@@ -474,7 +482,7 @@
             </div>
           </div>
 
-          <button type="submit" class="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md">
+          <button type="submit" id="btn-enviar-recarga" class="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md">
             <i class="fa-solid fa-paper-plane"></i> Enviar Comprobante a Verificación
           </button>
         </form>
@@ -786,6 +794,7 @@
             updateAvailabilityUI();
             startDriverFirestoreRealtime();
             escucharMiPerfil(user.uid);
+            escucharSolicitudesPendientes(user.uid);
             refrescarPuertaDeAudio();
           } else {
             detenerCanalDeCarreras();
@@ -848,6 +857,37 @@
      * contador solo se actualizaría al recargar la página, y el domiciliario
      * no vería llegar la recarga que el administrador acaba de aprobar.
      */
+    /**
+     * Muestra si hay una recarga o un canje esperando aprobación. Sin esto el
+     * domiciliario envía su código y no vuelve a saber nada, y cree que la
+     * app no hizo nada.
+     */
+    let unsubSolicitudes = null;
+    function escucharSolicitudesPendientes(uid) {
+      if (unsubSolicitudes) { try { unsubSolicitudes(); } catch (e) {} }
+      const targetDb = (typeof db !== 'undefined' && db) ? db : window.db;
+
+      unsubSolicitudes = targetDb.collection('recharges')
+        .where('driver_id', '==', uid)
+        .onSnapshot((snap) => {
+          const caja = document.getElementById('driver-solicitud-pendiente');
+          const txt = document.getElementById('driver-solicitud-texto');
+          if (!caja || !txt) return;
+
+          const pendientes = [];
+          snap.forEach(d => { const r = d.data(); if (r.status === 'pending') pendientes.push(r); });
+
+          if (!pendientes.length) { caja.classList.add('hidden'); return; }
+
+          const p = pendientes[0];
+          const cuantos = Number(p.servicios) || Math.floor((Number(p.amount) || 0) / COSTO_CARRERA);
+          txt.innerText = p.codigo_promo
+            ? `Tu código ${p.codigo_promo} está esperando que el administrador lo apruebe. Al aprobarlo sumarás ${cuantos} domicilios.`
+            : `Tu recarga de ${cuantos} domicilios está esperando aprobación del administrador.`;
+          caja.classList.remove('hidden');
+        }, (err) => console.warn('No se pudieron leer las solicitudes:', err.code || err.message));
+    }
+
     let unsubPerfil = null;
     function escucharMiPerfil(uid) {
       if (unsubPerfil) { try { unsubPerfil(); } catch (e) {} }
@@ -1446,11 +1486,37 @@
         }
 
         promoValidado = { codigo: codigo, domicilios: Number(p.domicilios) || 0 };
-        mostrar(`Código válido: ${promoValidado.domicilios} domicilios de cortesía. Presiona enviar para solicitarlo.`, 'ok');
+        mostrar(`Código válido: ${promoValidado.domicilios} domicilios de cortesía.`, 'ok');
+        aplicarModoPromocional(true);
 
       } catch (e) {
         console.error('Error validando el código:', e);
         mostrar('No se pudo validar: ' + (e.code || e.message), 'error');
+        aplicarModoPromocional(false);
+      }
+    }
+
+    /**
+     * Con un código validado, el formulario deja de pedir plata: se ocultan
+     * los paquetes y el comprobante, y el botón dice exactamente lo que va a
+     * pasar. Antes seguía diciendo "Enviar Comprobante a Verificación", que
+     * no tiene nada que ver con un código, y nadie sabía que faltaba enviarlo.
+     */
+    function aplicarModoPromocional(activo) {
+      const seccionPaquetes = document.getElementById('seccion-paquetes-pago');
+      const seccionComprobante = document.getElementById('seccion-comprobante');
+      const boton = document.getElementById('btn-enviar-recarga');
+
+      if (seccionPaquetes) seccionPaquetes.classList.toggle('hidden', activo);
+      if (seccionComprobante) seccionComprobante.classList.toggle('hidden', activo);
+
+      if (boton) {
+        boton.innerHTML = activo
+          ? `<i class="fa-solid fa-gift"></i> Solicitar mis ${promoValidado.domicilios} domicilios`
+          : '<i class="fa-solid fa-paper-plane"></i> Enviar Comprobante a Verificación';
+        boton.className = activo
+          ? 'w-full py-3 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md'
+          : 'w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md';
       }
     }
 
@@ -1476,6 +1542,7 @@
       promoValidado = null;
       document.getElementById('promo-codigo').value = '';
       document.getElementById('promo-resultado').classList.add('hidden');
+      aplicarModoPromocional(false);
       return true;
     }
 
@@ -1613,6 +1680,7 @@
 
         quitarCapturaComprobante();
         e.target.reset();
+        aplicarModoPromocional(false);
         closeRechargeModal();
         showToast(`Comprobante enviado. Al verificarlo sumarás ${servicios} domicilios.`);
       } catch (err) {

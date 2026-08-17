@@ -3,7 +3,8 @@
   "builds": [
     { "src": "api/index.py", "use": "@vercel/python" },
     { "src": "apps/**/*", "use": "@vercel/static" },
-    { "src": "shared/**/*", "use": "@vercel/static" }
+    { "src": "shared/**/*", "use": "@vercel/static" },
+    { "src": "public/**/*", "use": "@vercel/static" }
   ],
   "routes": [
     { "src": "/driver", "dest": "/apps/driver/index.html" },
@@ -12,6 +13,8 @@
     { "src": "/admin/(.*)", "dest": "/apps/admin/$1" },
     { "src": "/shared/(.*)", "dest": "/shared/$1" },
     { "src": "/api/(.*)", "dest": "/api/index.py" },
+    { "src": "/(icon-[^/]+\\.(?:svg|png))", "dest": "/public/$1" },
+    { "src": "/(favicon\\.ico)", "dest": "/public/$1" },
     { "src": "/(.*)", "dest": "/apps/client/$1" }
   ]
 }
