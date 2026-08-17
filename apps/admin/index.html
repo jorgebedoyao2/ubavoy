@@ -339,6 +339,48 @@
         <div id="promo-feed" class="space-y-2 pt-1"></div>
       </div>
 
+      <!-- ============================================================
+           MÉTRICAS DE CONSUMO DE PAQUETES
+           Responde la pregunta del negocio: cuando entrego un paquete,
+           ¿en cuántos días se lo gastan? De ahí sale cada cuánto vuelve
+           a comprar cada domiciliario.
+           ============================================================ -->
+      <div class="glass-card rounded-2xl p-4 border border-purple-500/30 space-y-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+            <i class="fa-solid fa-gauge-high text-purple-400"></i> Consumo de Paquetes
+          </h3>
+          <button type="button" onclick="calcularMetricasPaquetes()"
+            class="text-[10px] font-bold text-purple-300 hover:text-purple-200 flex items-center gap-1">
+            <i class="fa-solid fa-rotate"></i> Recalcular
+          </button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div class="bg-slate-900/70 border border-slate-800 rounded-xl py-2.5 px-1">
+            <p class="font-display font-black text-xl text-emerald-400 leading-none" id="met-dias-promedio">—</p>
+            <p class="text-[9px] uppercase tracking-wide text-slate-400 mt-1">días promedio<br>por paquete</p>
+          </div>
+          <div class="bg-slate-900/70 border border-slate-800 rounded-xl py-2.5 px-1">
+            <p class="font-display font-black text-xl text-sky-400 leading-none" id="met-ritmo">—</p>
+            <p class="text-[9px] uppercase tracking-wide text-slate-400 mt-1">domicilios<br>por día</p>
+          </div>
+          <div class="bg-slate-900/70 border border-slate-800 rounded-xl py-2.5 px-1">
+            <p class="font-display font-black text-xl text-amber-400 leading-none" id="met-en-curso">—</p>
+            <p class="text-[9px] uppercase tracking-wide text-slate-400 mt-1">paquetes<br>en curso</p>
+          </div>
+        </div>
+
+        <div id="met-por-tamano" class="space-y-1.5"></div>
+
+        <div>
+          <p class="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5 font-bold">Historial de paquetes entregados</p>
+          <div id="met-tabla" class="space-y-1.5"></div>
+        </div>
+
+        <div id="met-promos" class="border-t border-slate-800 pt-3"></div>
+      </div>
+
       <!-- SECTOR GRÁFICOS CHART.JS -->
       <div class="space-y-4">
         <!-- 1. GRÁFICO DE DONA: DISTRIBUCIÓN DE ESTADOS -->
@@ -545,6 +587,7 @@
 
       renderAutorizadosList();
       renderPromosList();
+      calcularMetricasPaquetes();
       renderAdminDriversList();
       loadAdminStatsFromAPIAndFirestore();
       subscribeRealtimeAdminOrders();
@@ -766,6 +809,195 @@
         console.error('Error leyendo promociones:', err);
         feed.innerHTML = `<p class="text-[11px] text-rose-300 py-2">No se pudo leer: ${escapeHtml(err.code || err.message)}</p>`;
       });
+    }
+
+    // ============================================================
+    // MÉTRICAS DE CONSUMO DE PAQUETES
+    // ============================================================
+    // La pregunta a responder: cuando entrego un paquete de N domicilios,
+    // ¿en cuántos días se lo gastan?
+    //
+    // Método: por cada recarga aprobada de un domiciliario se toman sus
+    // carreras posteriores en orden. La carrera número N es la que agota el
+    // paquete, y la diferencia de fechas es lo que duró. Si todavía no llega
+    // a N carreras, el paquete sigue en curso.
+    //
+    // Se calcula en el navegador y no en el servidor porque con este volumen
+    // sale gratis: son los mismos documentos que el panel ya lee.
+
+    function diasEntre(desde, hasta) {
+      const a = new Date(desde).getTime();
+      const b = new Date(hasta).getTime();
+      if (isNaN(a) || isNaN(b)) return null;
+      return (b - a) / 86400000;
+    }
+
+    function formatoDias(d) {
+      if (d === null || d === undefined) return '—';
+      if (d < 1) {
+        const horas = Math.max(1, Math.round(d * 24));
+        return horas + (horas === 1 ? ' hora' : ' horas');
+      }
+      return (d < 10 ? d.toFixed(1) : Math.round(d)) + (d < 2 ? ' día' : ' días');
+    }
+
+    async function calcularMetricasPaquetes() {
+      const cajaTabla = document.getElementById('met-tabla');
+      if (cajaTabla) cajaTabla.innerHTML = '<p class="text-[11px] text-slate-500 py-2">Calculando…</p>';
+
+      try {
+        const [snapRecargas, snapPedidos, snapPromos] = await Promise.all([
+          db.collection('recharges').get(),
+          db.collection('orders').get(),
+          db.collection('promociones').get(),
+        ]);
+
+        // Carreras tomadas por cada domiciliario, ordenadas en el tiempo.
+        const carrerasPorDriver = {};
+        snapPedidos.forEach(d => {
+          const o = d.data();
+          const quien = o.assigned_driver_id;
+          const cuando = o.assigned_at || o.completed_at;
+          if (!quien || !cuando) return;
+          (carrerasPorDriver[quien] = carrerasPorDriver[quien] || []).push(new Date(cuando).getTime());
+        });
+        Object.values(carrerasPorDriver).forEach(lista => lista.sort((a, b) => a - b));
+
+        // Paquetes aprobados, del más reciente al más antiguo.
+        const paquetes = [];
+        snapRecargas.forEach(d => {
+          const r = d.data();
+          if (r.status !== 'approved') return;
+          const entregado = r.approved_at || r.created_at;
+          if (!entregado) return;
+          paquetes.push({
+            id: d.id,
+            driver: r.driver_id,
+            nombre: r.driver_name || r.driver_email || 'Domiciliario',
+            servicios: Number(r.servicios) || Math.floor((Number(r.amount) || 0) / COSTO_CARRERA_ADMIN),
+            esPromo: !!r.codigo_promo,
+            codigo: r.codigo_promo || null,
+            entregado: entregado,
+          });
+        });
+        paquetes.sort((a, b) => new Date(b.entregado) - new Date(a.entregado));
+
+        // Para cada paquete, buscar la carrera que lo agotó.
+        const t0 = Date.now();
+        paquetes.forEach(p => {
+          const carreras = (carrerasPorDriver[p.driver] || [])
+            .filter(t => t >= new Date(p.entregado).getTime());
+          if (p.servicios > 0 && carreras.length >= p.servicios) {
+            const agotado = carreras[p.servicios - 1];
+            p.agotadoEn = new Date(agotado).toISOString();
+            p.dias = diasEntre(p.entregado, p.agotadoEn);
+          } else {
+            p.usadas = carreras.length;
+            p.dias = null;
+            p.diasTranscurridos = diasEntre(p.entregado, new Date(t0).toISOString());
+          }
+        });
+
+        pintarMetricas(paquetes, snapPromos);
+
+      } catch (e) {
+        console.error('Error calculando métricas:', e);
+        if (cajaTabla) {
+          cajaTabla.innerHTML = `<p class="text-[11px] text-rose-300 py-2">No se pudo calcular: ${escapeHtml(e.code || e.message)}</p>`;
+        }
+      }
+    }
+
+    function pintarMetricas(paquetes, snapPromos) {
+      const consumidos = paquetes.filter(p => p.dias !== null && p.dias !== undefined);
+      const enCurso = paquetes.filter(p => p.dias === null);
+
+      // Promedio de días por paquete consumido
+      const promedio = consumidos.length
+        ? consumidos.reduce((s, p) => s + p.dias, 0) / consumidos.length
+        : null;
+      document.getElementById('met-dias-promedio').innerText =
+        promedio === null ? '—' : formatoDias(promedio).replace(/ (días?|horas?)$/, '');
+
+      // Ritmo: domicilios por día, calculado sobre los totales.
+      // NO se promedian las tasas de cada paquete: uno que se gastó en pocas
+      // horas dispara ese promedio y hace creer que todos van a ese ritmo.
+      // Dividir el total de domicilios entre el total de días es lo que de
+      // verdad representa el pulso del negocio.
+      const totalServicios = consumidos.reduce((s, p) => s + p.servicios, 0);
+      const totalDias = consumidos.reduce((s, p) => s + Math.max(p.dias, 0.04), 0);
+      const ritmo = totalDias > 0 ? totalServicios / totalDias : null;
+      document.getElementById('met-ritmo').innerText = ritmo === null ? '—' : ritmo.toFixed(1);
+      document.getElementById('met-en-curso').innerText = enCurso.length;
+
+      // Desglose por tamaño de paquete
+      const porTamano = {};
+      consumidos.forEach(p => {
+        (porTamano[p.servicios] = porTamano[p.servicios] || []).push(p.dias);
+      });
+      const cajaTamano = document.getElementById('met-por-tamano');
+      const tamanos = Object.keys(porTamano).sort((a, b) => a - b);
+      cajaTamano.innerHTML = tamanos.length
+        ? tamanos.map(t => {
+            const lista = porTamano[t];
+            const prom = lista.reduce((s, d) => s + d, 0) / lista.length;
+            return `
+              <div class="flex items-center justify-between text-[11px] bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-1.5">
+                <span class="text-slate-300 font-semibold">Paquete de ${t} domicilios</span>
+                <span class="text-slate-400">se gasta en <strong class="text-emerald-400">${formatoDias(prom)}</strong>
+                  <span class="text-slate-600">(${lista.length} ${lista.length === 1 ? 'vez' : 'veces'})</span></span>
+              </div>`;
+          }).join('')
+        : '<p class="text-[11px] text-slate-500">Aún no hay paquetes consumidos por completo para promediar.</p>';
+
+      // Historial
+      const tabla = document.getElementById('met-tabla');
+      tabla.innerHTML = paquetes.length
+        ? paquetes.slice(0, 12).map(p => {
+            const terminado = p.dias !== null && p.dias !== undefined;
+            return `
+              <div class="flex items-center justify-between gap-2 text-[11px] bg-slate-900/60 border ${terminado ? 'border-slate-800' : 'border-amber-800/60'} rounded-lg px-3 py-1.5">
+                <div class="min-w-0">
+                  <p class="text-slate-200 font-semibold truncate">
+                    ${escapeHtml(p.nombre)}
+                    ${p.esPromo ? `<span class="text-purple-400 font-mono text-[9px] ml-1">${escapeHtml(p.codigo || 'PROMO')}</span>` : ''}
+                  </p>
+                  <p class="text-[9px] text-slate-500">
+                    ${p.servicios} domicilios · entregado ${escapeHtml(fechaLegibleAdmin(p.entregado))}
+                  </p>
+                </div>
+                <div class="text-right shrink-0">
+                  ${terminado
+                    ? `<p class="text-emerald-400 font-bold">${formatoDias(p.dias)}</p>
+                       <p class="text-[9px] text-slate-500">en gastarlo</p>`
+                    : `<p class="text-amber-400 font-bold">${p.usadas}/${p.servicios}</p>
+                       <p class="text-[9px] text-slate-500">${formatoDias(p.diasTranscurridos)} corridos</p>`}
+                </div>
+              </div>`;
+          }).join('')
+        : '<p class="text-[11px] text-slate-500">Todavía no has entregado paquetes.</p>';
+
+      // Códigos promocionales
+      const promos = [];
+      snapPromos.forEach(d => promos.push({ id: d.id, ...d.data() }));
+      const usados = promos.filter(p => p.usado_por);
+      const tiemposCanje = usados
+        .map(p => diasEntre(p.creado_en, p.usado_en))
+        .filter(d => d !== null);
+      const promCanje = tiemposCanje.length
+        ? tiemposCanje.reduce((s, d) => s + d, 0) / tiemposCanje.length
+        : null;
+
+      document.getElementById('met-promos').innerHTML = `
+        <p class="text-[10px] uppercase tracking-wide text-slate-500 mb-2 font-bold">Códigos promocionales</p>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div><p class="font-display font-bold text-base text-purple-300">${promos.length}</p>
+               <p class="text-[9px] text-slate-500">creados</p></div>
+          <div><p class="font-display font-bold text-base text-emerald-400">${usados.length}</p>
+               <p class="text-[9px] text-slate-500">canjeados</p></div>
+          <div><p class="font-display font-bold text-base text-slate-300">${promCanje === null ? '—' : formatoDias(promCanje)}</p>
+               <p class="text-[9px] text-slate-500">tardan en canjear</p></div>
+        </div>`;
     }
 
     async function alternarPromo(codigo, estabaActivo) {
