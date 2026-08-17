@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ubavoy-admin-v2.5.0';
+const CACHE_NAME = 'ubavoy-admin-v3.0.0';
 const ASSETS = [
   '/apps/admin/',
   '/apps/admin/index.html',
