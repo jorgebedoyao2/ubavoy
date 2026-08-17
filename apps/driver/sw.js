@@ -1,77 +1,97 @@
-const CACHE_NAME = 'ubavoy-driver-v18.0';
-const ASSETS_TO_CACHE = [
+/**
+ * UbaVoy - Service Worker de la app del DOMICILIARIO
+ * ===========================================================================
+ * Dos reglas que aprendimos a la mala:
+ *
+ *  1. El HTML SIEMPRE se pide a la red primero. Si se sirve desde caché, una
+ *     versión rota o a medias se queda pegada para siempre y la app abre en
+ *     blanco, sin forma de recuperarse desde el celular.
+ *
+ *  2. La precarga NUNCA debe usar cache.addAll con una lista fija: si UNO
+ *     solo de los recursos da 404, addAll rechaza entero y el service worker
+ *     no llega a instalarse. Eso fue exactamente lo que pasó cuando los
+ *     iconos .svg se reemplazaron por .png: la lista seguía pidiendo el svg,
+ *     el install fallaba y el celular quedaba servido por la versión vieja.
+ */
+
+const CACHE_NAME = 'ubavoy-driver-v19';
+
+const RECURSOS = [
+  '/apps/driver/',
   '/apps/driver/manifest.json',
-  '/icon-192.svg',
-  'https://cdn.tailwindcss.com',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+  '/icon-driver-192.png',
+  '/icon-driver-512.png',
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    }).then(() => self.skipWaiting())
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    // Uno por uno y tolerando fallos: que falte un recurso no puede impedir
+    // que el service worker se instale.
+    await Promise.all(RECURSOS.map(async (url) => {
+      try { await cache.add(url); }
+      catch (e) { console.warn('[SW driver] no se pudo precargar', url); }
+    }));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            console.log('🧹 Eliminando caché antigua de Driver:', cache);
-            return caches.delete(cache);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
-  );
-});
-
-// NOTIFICACIONES PUSH CON PANTALLA APAGADA
-self.addEventListener('push', function(event) {
-  const data = event.data ? event.data.json() : { title: '🚨 ¡NUEVO MANDADO EN UBATÉ!', body: 'Hay una nueva carrera disponible en la bolsa de trabajo.' };
-  const options = {
-    body: data.body,
-    icon: '/icon-192.svg',
-    badge: '/icon-192.svg',
-    vibrate: [500, 200, 500, 200, 1000],
-    tag: 'new-order-alert',
-    renotify: true,
-    data: { url: '/apps/driver/' }
-  };
-
-  event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
-});
-
-self.addEventListener('notificationclick', function(event) {
-  event.notification.close();
-  event.waitUntil(
-    clients.openWindow(event.notification.data.url || '/apps/driver/')
-  );
+  event.waitUntil((async () => {
+    const nombres = await caches.keys();
+    await Promise.all(nombres.map((n) => (n !== CACHE_NAME ? caches.delete(n) : null)));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  const req = event.request;
+  if (req.method !== 'GET') return;
 
-  // Network-First para páginas HTML y llamadas a Firebase Firestore
-  if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.hostname.includes('firestore.googleapis.com')) {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
-    );
+  const url = new URL(req.url);
+
+  // Firestore y las APIs nunca se cachean.
+  if (url.hostname.includes('firestore.googleapis.com') ||
+      url.hostname.includes('googleapis.com') ||
+      url.pathname.startsWith('/api/')) {
     return;
   }
 
-  // Cache-First para recursos estáticos (CSS, Fuentes, Iconos)
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
+  // HTML: red primero, caché solo si no hay internet.
+  if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
+    event.respondWith((async () => {
+      try {
+        const res = await fetch(req);
+        const cache = await caches.open(CACHE_NAME);
+        cache.put('/apps/driver/', res.clone());
+        return res;
+      } catch (e) {
+        return (await caches.match('/apps/driver/')) ||
+               new Response('Sin conexión', { status: 503, headers: { 'Content-Type': 'text/plain' } });
       }
-      return fetch(event.request);
-    })
-  );
+    })());
+    return;
+  }
+
+  // Recursos estáticos: caché primero, y se refresca en segundo plano.
+  event.respondWith((async () => {
+    const enCache = await caches.match(req);
+    if (enCache) return enCache;
+    try {
+      const res = await fetch(req);
+      if (res && res.status === 200 && res.type === 'basic') {
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(req, res.clone());
+      }
+      return res;
+    } catch (e) {
+      return new Response('', { status: 504 });
+    }
+  })());
+});
+
+// Notificación al tocarla: abre la app del domiciliario.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(clients.openWindow('/apps/driver/'));
 });

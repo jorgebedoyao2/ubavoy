@@ -2490,9 +2490,35 @@
       document.getElementById('recharge-modal').classList.add('hidden');
     }
 
-    function registerServiceWorker() {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/apps/driver/sw.js', { scope: '/apps/driver/' }).catch(() => {});
+    /**
+     * Registra el service worker de ESTA app y desmonta los que sobren.
+     *
+     * Antes el service worker se registraba con ruta relativa desde /driver,
+     * lo que terminaba instalando el del cliente con alcance sobre todo el
+     * sitio. Ese service worker viejo puede seguir vivo en los celulares que
+     * ya abrieron la app, sirviendo páginas equivocadas desde su caché y
+     * dejando la pantalla en blanco. Aquí se elimina.
+     */
+    async function registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+
+      try {
+        const registros = await navigator.serviceWorker.getRegistrations();
+        for (const r of registros) {
+          const alcance = new URL(r.scope).pathname;
+          if (alcance !== '/apps/driver/') {
+            await r.unregister();
+            console.log('[SW] desmontado service worker ajeno:', alcance);
+          }
+        }
+      } catch (e) {
+        console.warn('[SW] no se pudieron revisar los registros:', e.message);
+      }
+
+      try {
+        await navigator.serviceWorker.register('/apps/driver/sw.js', { scope: '/apps/driver/' });
+      } catch (e) {
+        console.warn('[SW] no se pudo registrar:', e.message);
       }
     }
 

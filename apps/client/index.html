@@ -1236,9 +1236,31 @@
       }
     }
 
-    function registerServiceWorker() {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/apps/client/sw.js', { scope: '/apps/client/' }).catch(() => {});
+    /**
+     * Registra el service worker de ESTA app y desmonta los que sobren.
+     * El service worker viejo tenía alcance sobre todo el sitio y podía
+     * servir páginas equivocadas desde su caché, dejando la app en blanco.
+     */
+    async function registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+
+      try {
+        const registros = await navigator.serviceWorker.getRegistrations();
+        for (const r of registros) {
+          const alcance = new URL(r.scope).pathname;
+          if (alcance !== '/apps/client/') {
+            await r.unregister();
+            console.log('[SW] desmontado service worker ajeno:', alcance);
+          }
+        }
+      } catch (e) {
+        console.warn('[SW] no se pudieron revisar los registros:', e.message);
+      }
+
+      try {
+        await navigator.serviceWorker.register('/apps/client/sw.js', { scope: '/apps/client/' });
+      } catch (e) {
+        console.warn('[SW] no se pudo registrar:', e.message);
       }
     }
 
