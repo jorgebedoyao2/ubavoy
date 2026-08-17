@@ -103,6 +103,50 @@ def dashboard(authorization: str | None = Header(default=None)):
     return HTMLResponse(panel.construir(indicadores, figuras))
 
 
+@app.post("/api/informe", response_class=HTMLResponse)
+async def informe_desde_navegador(
+    carga: dict,
+    authorization: str | None = Header(default=None),
+):
+    """
+    Arma el informe con los datos que envía el panel del administrador.
+
+    Por qué existe esta ruta ademas de /api/dashboard: Google bloquea la
+    creación de claves de cuenta de servicio en este proyecto (política de
+    organización), así que el servidor no puede leer Firestore por su cuenta.
+    El navegador del administrador sí puede, porque ya tiene sesión y las
+    reglas le permiten listar las colecciones.
+
+    La sesión se verifica igual: se comprueba la firma del token contra las
+    llaves públicas de Google, que no requiere ningún secreto. Sin eso, este
+    endpoint quedaría abierto a que cualquiera lo use como servidor de cálculo.
+    """
+    from api import analitica, graficas, panel, identidad
+
+    autorizado, detalle = identidad.verificar(_token_de(authorization), CORREO_ADMIN)
+    if not autorizado:
+        raise HTTPException(status_code=401, detail=detalle)
+
+    datos = analitica.datos_desde_navegador(carga)
+    if datos['pedidos'].empty:
+        return HTMLResponse(panel.sin_datos(), status_code=200)
+
+    indicadores = analitica.calcular(datos)
+    series = analitica.series_temporales(datos['pedidos'])
+
+    figuras = {
+        'dia': graficas.pedidos_por_dia(series),
+        'hora': graficas.pedidos_por_hora(series),
+        'calor': graficas.mapa_calor(series),
+        'tiempos': graficas.tiempos(series),
+        'mapa': graficas.mapa_entregas(series),
+        'embudo': graficas.embudo(indicadores),
+        'ranking': graficas.ranking_domiciliarios(indicadores),
+    }
+
+    return HTMLResponse(panel.construir(indicadores, figuras))
+
+
 @app.get("/api/metricas")
 def metricas(authorization: str | None = Header(default=None)):
     """Los mismos indicadores en JSON, para hojas de cálculo o presentaciones."""

@@ -1179,10 +1179,39 @@
         return;
       }
 
-      showToast('Generando el informe...');
+      showToast('Leyendo datos y generando el informe...');
       try {
         const token = await usuario.getIdToken();
-        const r = await fetch('/api/dashboard', { headers: { Authorization: 'Bearer ' + token } });
+
+        // El navegador lee las colecciones con la sesión del administrador y
+        // se las manda a Python para que las analice. Se hace así porque
+        // Google bloquea la creación de claves de cuenta de servicio en este
+        // proyecto, y sin esa clave el servidor no puede leer Firestore solo.
+        const leer = async (coleccion) => {
+          const snap = await db.collection(coleccion).get();
+          const filas = [];
+          snap.forEach(d => {
+            const x = d.data();
+            // Los Timestamp de Firestore no sobreviven a JSON: se pasan a texto.
+            Object.keys(x).forEach(k => {
+              if (x[k] && typeof x[k].toDate === 'function') x[k] = x[k].toDate().toISOString();
+            });
+            // El comprobante es una imagen pesada y el informe no la usa.
+            delete x.receipt_image;
+            filas.push({ id: d.id, ...x });
+          });
+          return filas;
+        };
+
+        const [orders, users, recharges, promociones] = await Promise.all([
+          leer('orders'), leer('users'), leer('recharges'), leer('promociones'),
+        ]);
+
+        const r = await fetch('/api/informe', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orders, users, recharges, promociones }),
+        });
 
         if (!r.ok) {
           const detalle = await r.text();

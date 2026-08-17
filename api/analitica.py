@@ -128,6 +128,52 @@ def _minutos(desde, hasta):
 # Carga
 # ---------------------------------------------------------------------------
 
+def preparar_pedidos(df: 'pd.DataFrame') -> 'pd.DataFrame':
+    """Deja el DataFrame de pedidos con las columnas derivadas que usa el informe."""
+    if df.empty:
+        return df
+
+    def col(nombre):
+        return df[nombre] if nombre in df.columns else pd.Series([None] * len(df), index=df.index)
+
+    df['f_creado'] = col('created_at').map(a_fecha)
+    df['f_asignado'] = col('assigned_at').map(a_fecha)
+    df['f_entregado'] = col('completed_at').map(a_fecha)
+
+    df['min_espera'] = [_minutos(c, a) for c, a in zip(col('created_at'), col('assigned_at'))]
+    df['min_entrega'] = [_minutos(a, e) for a, e in zip(col('assigned_at'), col('completed_at'))]
+    df['min_total'] = [_minutos(c, e) for c, e in zip(col('created_at'), col('completed_at'))]
+
+    df['estado'] = col('status').astype(str).str.lower()
+    df['valor'] = pd.to_numeric(col('estimated_price'), errors='coerce').fillna(0)
+    return df
+
+
+def datos_desde_navegador(carga: dict):
+    """
+    Arma los DataFrames con los documentos que envía el panel del
+    administrador desde el navegador.
+
+    Existe porque Google bloquea la creación de claves de cuenta de servicio
+    en este proyecto, asi que el servidor no puede leer Firestore por su
+    cuenta. El navegador SI puede: ya está autenticado como administrador y
+    las reglas le permiten listar las colecciones. El servidor solo analiza
+    lo que recibe, y verifica aparte que quien envía sea el administrador.
+    """
+    def tabla(nombre):
+        filas = carga.get(nombre) or []
+        return pd.DataFrame(filas) if filas else pd.DataFrame()
+
+    pedidos = preparar_pedidos(tabla('orders'))
+
+    return {
+        'pedidos': pedidos,
+        'usuarios': tabla('users'),
+        'recargas': tabla('recharges'),
+        'promociones': tabla('promociones'),
+    }
+
+
 def cargar_datos():
     """Trae las colecciones y las deja como DataFrames listos para analizar."""
     db = obtener_firestore()

@@ -107,26 +107,33 @@ def sin_credenciales():
       <p class="sub">Informe de operación · Ubaté, Cundinamarca</p></div>
   </div>
   <div class="aviso">
-    <b>Falta conectar el informe con la base de datos</b>
-    <p>Este panel lee Firestore desde el servidor, y para eso necesita una cuenta
-    de servicio. Es un dato secreto, así que no vive en el código: se configura
-    como variable de entorno en Vercel.</p>
+    <b>Abre el informe desde el panel de administración</b>
+    <p>Esta dirección por sí sola no puede generar el informe: el servidor no
+    tiene permitido leer la base de datos por su cuenta.</p>
   </div>
-  <h2>Cómo activarlo</h2>
+
+  <h2>Cómo verlo</h2>
   <ol style="color:var(--tinta2);font-size:13.5px;line-height:2">
-    <li>Firebase → ⚙️ Configuración del proyecto → <b>Cuentas de servicio</b> →
-        <b>Generar nueva clave privada</b>. Se descarga un archivo .json.</li>
-    <li>Vercel → proyecto <b>ubavoy</b> → Settings → <b>Environment Variables</b>.</li>
-    <li>Crear la variable <code>FIREBASE_SERVICE_ACCOUNT</code> y pegar
-        <b>todo el contenido</b> del .json como valor.</li>
-    <li>Volver a desplegar el proyecto.</li>
+    <li>Entra al panel en <code>ubavoy.vercel.app/apps/admin/</code> con tu cuenta de Google.</li>
+    <li>Arriba, en <b>KPI Métricas Consolidadas</b>, presiona
+        <b>Informe completo</b>.</li>
+    <li>El informe se abre en una pestaña nueva, ya con tus datos.</li>
   </ol>
-  <div class="aviso" style="background:#2A0B0B;border-color:#6B1515;border-left-color:var(--rosa)">
-    <b style="color:var(--rosa)">No subas ese archivo al repositorio</b>
-    <p>La cuenta de servicio da acceso total a la base de datos, saltándose las
-    reglas de seguridad. Solo debe existir como variable de entorno.</p>
-  </div>
-  <p class="pie">UbaVoy · el informe se genera en Python al abrir esta página</p>
+
+  <h2>Por qué funciona así</h2>
+  <p style="color:var(--tinta2);font-size:13.5px;max-width:70ch">
+    Google bloquea la creación de claves de cuenta de servicio en este proyecto,
+    así que el servidor no puede consultar Firestore por sí mismo. Tu navegador
+    sí puede, porque ya tiene tu sesión de administrador y las reglas se lo
+    permiten. Entonces el navegador lee los datos y Python los analiza.
+  </p>
+  <p style="color:var(--tinta2);font-size:13.5px;max-width:70ch">
+    Resulta ser más seguro que la alternativa: no existe ninguna llave maestra
+    guardada en el servidor que alguien pueda robarse. Cada informe se genera
+    con la sesión de quien lo pide, y esa sesión se verifica contra las llaves
+    públicas de Google antes de procesar nada.
+  </p>
+  <p class="pie">UbaVoy · el informe se genera en Python (FastAPI + pandas + Plotly)</p>
 </div></body></html>"""
 
 
