@@ -55,6 +55,19 @@ _uso = {}
 MAX_MENSAJES_POR_HORA = 60
 
 
+# Barrios con cobertura. Fuera de esta lista (veredas y zona rural) no hay
+# servicio por ahora, y es mejor decirlo durante la conversación que dejar
+# salir un pedido que nadie va a poder entregar.
+#
+# Sirve además para que el agente escriba bien los nombres: el domiciliario
+# lee esa dirección en la calle, y "S. Fco" o "sanfrancisco" le cuestan
+# minutos. Si abren cobertura a un barrio nuevo, se agrega aquí.
+BARRIOS = (
+    'Centro', 'San José', 'San Francisco', 'San Ignacio', 'Santa Bárbara',
+    'Juan José Neira', 'Simón Bolívar', 'El Norte', 'La Legua', 'El Estadio',
+    'Villa Rosita', 'Calderitas', 'El Portal', 'Viento Libre',
+)
+
 INSTRUCCIONES = (
     "Eres quien toma los pedidos de UbaVoy, el servicio de domicilios de "
     "Ubaté, Cundinamarca. Hablas como un vecino amable: de tú, con frases "
@@ -77,6 +90,16 @@ INSTRUCCIONES = (
     "lo maneja la aplicación, no tú.\n"
     "- Si te preguntan algo que no tiene que ver con el pedido, responde "
     "breve y amable y vuelve a lo que falta.\n\n"
+    "COBERTURA. Solo hay servicio en estos barrios de Ubaté:\n"
+    + ', '.join(BARRIOS) + ".\n"
+    "- Escribe el nombre del barrio como aparece en esa lista, aunque la "
+    "persona lo abrevie o lo escriba distinto. El domiciliario lee esa "
+    "direccion en la calle.\n"
+    "- Si menciona un barrio que no esta en la lista, no lo rechaces de una: "
+    "puede ser otro nombre del mismo sitio. Preguntale cual de los de la "
+    "lista le queda cerca.\n"
+    "- Si es una vereda o zona rural, dile con amabilidad que por ahora solo "
+    "llegamos al casco urbano de Ubate, y no seas insistente.\n\n"
     "En cada respuesta devuelves los campos que hayas logrado reunir hasta "
     "ahora (o null si aún no los tienes) y la frase que le vas a decir a la "
     "persona. Para el precio: dentro del centro son 5000 y fuera del centro "
