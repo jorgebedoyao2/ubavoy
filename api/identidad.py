@@ -103,3 +103,50 @@ def _llave_publica(certificado_pem: str):
     from cryptography.x509 import load_pem_x509_certificate
     cert = load_pem_x509_certificate(certificado_pem.encode('utf-8'))
     return cert.public_key()
+
+
+def verificar_usuario(token: str) -> tuple[bool, str, str]:
+    """
+    Igual que verificar(), pero para CUALQUIER usuario con sesión, no solo el
+    administrador. Devuelve (autorizado, uid, correo).
+
+    Por qué existe aparte: el agente de pedidos lo puede usar cualquier
+    cliente logueado, mientras que el informe es solo del dueño. Se deja como
+    función nueva en vez de agregarle un parámetro a verificar() para no
+    tocar el camino del informe, que ya está probado en producción.
+    """
+    if not token:
+        return False, '', 'Falta la sesión'
+
+    try:
+        import jwt
+    except ImportError:
+        return False, '', 'Falta la librería de verificación en el servidor'
+
+    try:
+        encabezado = jwt.get_unverified_header(token)
+    except Exception as e:
+        return False, '', f'Token con formato inválido: {e}'
+
+    kid = encabezado.get('kid')
+    certificados = _certificados()
+    if kid not in certificados:
+        return False, '', 'El token no corresponde a ninguna llave vigente de Google'
+
+    try:
+        llave = _llave_publica(certificados[kid])
+        datos = jwt.decode(
+            token,
+            llave,
+            algorithms=['RS256'],
+            audience=PROYECTO,
+            issuer=EMISOR,
+        )
+    except Exception as e:
+        return False, '', f'Sesión no válida o vencida: {e}'
+
+    uid = (datos.get('user_id') or datos.get('sub') or '').strip()
+    if not uid:
+        return False, '', 'El token no trae identificador de usuario'
+
+    return True, uid, (datos.get('email') or '').lower().strip()
