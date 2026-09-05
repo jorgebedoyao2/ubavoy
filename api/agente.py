@@ -37,7 +37,15 @@ URL_OPENAI = 'https://api.openai.com/v1/chat/completions'
 # techo alguien podría mandar un mensaje enorme y encarecer la cuenta.
 MAX_CARACTERES_MENSAJE = 400
 MAX_TURNOS_HISTORIAL = 12
-MAX_TOKENS_RESPUESTA = 300
+
+# Ojo con este número: los modelos de razonamiento (la familia gpt-5) gastan
+# tokens "pensando" ANTES de escribir, y salen de este mismo presupuesto. Con
+# un techo bajo se lo gastan razonando y devuelven la respuesta vacía, que se
+# ve como un fallo genérico y cuesta horas de diagnosticar.
+#
+# Subirlo no encarece: solo se paga lo que el modelo realmente genera, y
+# nuestras respuestas son de dos frases.
+MAX_TOKENS_RESPUESTA = int(os.environ.get('OPENAI_MAX_TOKENS', '2000'))
 
 # Freno por usuario. Advertencia honesta: Vercel arranca procesos nuevos
 # constantemente, así que esta memoria se pierde y el freno NO es infalible.
@@ -192,14 +200,39 @@ def _llamar_openai(mensajes):
             respuesta = json.loads(r.read().decode('utf-8'))
     except urllib.error.HTTPError as e:
         detalle = e.read().decode('utf-8', 'replace')[:400]
-        raise RuntimeError('OpenAI respondio ' + str(e.code) + ': ' + detalle)
+        raise RuntimeError(
+            'OpenAI respondio ' + str(e.code) + ' con el modelo ' + MODELO
+            + ': ' + detalle
+        )
     except Exception as e:
         raise RuntimeError('No se pudo hablar con OpenAI: ' + str(e))
 
+    # El diagnóstico va aquí y no en el cliente: cuando algo falla hay que
+    # poder saber SI el modelo contestó vacío y por qué se detuvo, que es lo
+    # que distingue "se quedó sin tokens razonando" de "rechazó la petición".
     try:
-        return json.loads(respuesta['choices'][0]['message']['content'])
+        eleccion = respuesta['choices'][0]
+    except Exception:
+        raise RuntimeError('OpenAI no devolvio ninguna respuesta: '
+                           + json.dumps(respuesta)[:300])
+
+    contenido = (eleccion.get('message') or {}).get('content') or ''
+    razon = eleccion.get('finish_reason', 'desconocida')
+    uso = respuesta.get('usage') or {}
+
+    if not contenido.strip():
+        raise RuntimeError(
+            'El modelo ' + MODELO + ' contesto vacio (motivo: ' + str(razon)
+            + ', tokens usados: ' + str(uso.get('completion_tokens', '?'))
+            + ' de ' + str(MAX_TOKENS_RESPUESTA) + '). Si el motivo es '
+            '"length", suba OPENAI_MAX_TOKENS o use un modelo sin razonamiento.'
+        )
+
+    try:
+        return json.loads(contenido)
     except Exception as e:
-        raise RuntimeError('Respuesta del modelo ilegible: ' + str(e))
+        raise RuntimeError('Respuesta del modelo ilegible (' + str(e)
+                           + '): ' + contenido[:200])
 
 
 def conversar(carga, uid):

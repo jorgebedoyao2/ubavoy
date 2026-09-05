@@ -80,6 +80,26 @@ function agentePensando(encender) {
   caja.scrollTop = caja.scrollHeight;
 }
 
+/**
+ * Muestra el detalle tecnico de un fallo, en gris y pequeño, debajo del
+ * mensaje amable. No reemplaza al mensaje: la persona entiende qué hacer,
+ * y quien esté probando puede leer la causa sin abrir herramientas.
+ */
+function agenteMostrarDetalle(estado, detalle) {
+  const caja = document.getElementById('agenteMensajes');
+  if (!caja) return;
+
+  const fila = document.createElement('div');
+  fila.className = 'px-4 pb-2';
+  fila.innerHTML =
+    '<p class="text-[10px] leading-relaxed text-slate-600 font-mono break-words">' +
+    'diagnóstico ' + agenteEscapar(estado) + ' · ' + agenteEscapar(detalle) +
+    '</p>';
+
+  caja.appendChild(fila);
+  caja.scrollTop = caja.scrollHeight;
+}
+
 function agenteResumen() {
   const d = agenteEstado.datos;
   const partes = [];
@@ -210,12 +230,24 @@ async function agenteEnviar() {
     agentePensando(false);
 
     if (!r.ok) {
-      const detalle = await r.text();
-      console.error('Agente:', r.status, detalle);
+      const crudo = await r.text();
+      console.error('Agente:', r.status, crudo);
+
+      if (r.status === 401) {
+        agentePintar('agente', 'Tu sesión venció. Cierra y vuelve a entrar, por favor.');
+        return;
+      }
+
       agentePintar('agente',
-        r.status === 401
-          ? 'Tu sesión venció. Cierra y vuelve a entrar, por favor.'
-          : 'Se me cruzaron los cables. Intenta otra vez o usa el formulario de abajo.');
+        'Se me cruzaron los cables. Intenta otra vez o usa el formulario de abajo.');
+
+      // El detalle técnico se muestra en pantalla, no solo en la consola.
+      // Mientras el agente esté en pruebas esto ahorra una vuelta completa
+      // cada vez que algo falla: el error se lee en el celular, sin conectar
+      // el teléfono a un computador.
+      let detalle = crudo;
+      try { detalle = (JSON.parse(crudo).detail) || crudo; } catch (_) {}
+      agenteMostrarDetalle(r.status, detalle);
       return;
     }
 
