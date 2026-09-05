@@ -9,6 +9,7 @@ que daban una falsa sensación de tener métricas. Ahora todo sale de datos
 reales o dice claramente que no hay datos.
 """
 
+import os
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Header, HTTPException
@@ -62,6 +63,18 @@ def salud():
         "ciudad": "Ubaté, Cundinamarca",
         "comision_por_carrera": analitica.COMISION_POR_CARRERA,
         "base_de_datos": "conectada" if analitica.obtener_firestore() else "sin credenciales",
+        # Diagnóstico del agente. Se informa SI la llave llegó, nunca su valor:
+        # esta ruta es pública. Sin esto, un fallo de configuración solo se ve
+        # abriendo la consola del navegador, y adivinar sale caro en tiempo.
+        "agente": {
+            "llave_openai": "configurada" if os.environ.get('OPENAI_API_KEY', '').strip() else "FALTA",
+            "modelo": os.environ.get('OPENAI_MODEL', 'gpt-5-mini'),
+            # Vercel dice aquí en qué entorno corre este despliegue. Es lo que
+            # permite distinguir "la variable no existe" de "existe, pero no
+            # está habilitada para el entorno en el que estamos probando".
+            "entorno_vercel": os.environ.get('VERCEL_ENV', 'desconocido'),
+            "rama": os.environ.get('VERCEL_GIT_COMMIT_REF', 'desconocida'),
+        },
         "momento": datetime.now(timezone.utc).isoformat(),
     }
 
