@@ -9,6 +9,7 @@ que daban una falsa sensación de tener métricas. Ahora todo sale de datos
 reales o dice claramente que no hay datos.
 """
 
+import os
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Header, HTTPException
@@ -62,6 +63,18 @@ def salud():
         "ciudad": "Ubaté, Cundinamarca",
         "comision_por_carrera": analitica.COMISION_POR_CARRERA,
         "base_de_datos": "conectada" if analitica.obtener_firestore() else "sin credenciales",
+        # Diagnóstico del agente. Se informa SI la llave llegó, nunca su valor:
+        # esta ruta es pública. Sin esto, un fallo de configuración solo se ve
+        # abriendo la consola del navegador, y adivinar sale caro en tiempo.
+        "agente": {
+            "llave_openai": "configurada" if os.environ.get('OPENAI_API_KEY', '').strip() else "FALTA",
+            "modelo": os.environ.get('OPENAI_MODEL', 'gpt-5-mini'),
+            # Vercel dice aquí en qué entorno corre este despliegue. Es lo que
+            # permite distinguir "la variable no existe" de "existe, pero no
+            # está habilitada para el entorno en el que estamos probando".
+            "entorno_vercel": os.environ.get('VERCEL_ENV', 'desconocido'),
+            "rama": os.environ.get('VERCEL_GIT_COMMIT_REF', 'desconocida'),
+        },
         "momento": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -145,6 +158,37 @@ async def informe_desde_navegador(
     }
 
     return HTMLResponse(panel.construir(indicadores, figuras))
+
+
+@app.post("/api/agente")
+async def agente_de_pedidos(
+    carga: dict,
+    authorization: str | None = Header(default=None),
+):
+    """
+    Un turno de conversación con el agente que toma pedidos.
+
+    A diferencia del informe, esto lo puede usar CUALQUIER cliente con sesión
+    iniciada, no solo el administrador. Pero sesión sí se exige: detrás de
+    este endpoint hay una llave de OpenAI con saldo real, y sin verificar
+    quién llama, cualquiera podría dejarlo en bucle y agotar la cuenta.
+
+    El agente solo conversa. El pedido lo crea el navegador del cliente.
+    """
+    from api import agente, identidad
+
+    autorizado, uid, detalle = identidad.verificar_usuario(_token_de(authorization))
+    if not autorizado:
+        raise HTTPException(status_code=401, detail=detalle)
+
+    try:
+        return agente.conversar(carga, uid)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        # Falla del proveedor o falta de configuración: se distingue de un
+        # error del cliente para poder diagnosticarlo en los logs de Vercel.
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @app.get("/api/metricas")

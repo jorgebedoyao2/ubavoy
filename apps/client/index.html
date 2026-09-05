@@ -73,6 +73,7 @@
   <script src="/shared/firebase_config.js"></script>
   <script src="/shared/pwa_installer.js"></script>
   <script src="/shared/chat.js"></script>
+  <script src="/shared/agente_pedidos.js"></script>
 
   <style>
     body {
@@ -196,6 +197,15 @@
             Ubaté Centro
           </span>
         </div>
+
+        <!-- Atajo conversacional. El formulario de abajo sigue intacto: esto
+             solo lo llena por ti. Si el agente falla, se pide como siempre. -->
+        <button type="button" onclick="agenteAbrir()"
+          class="w-full mb-3.5 bg-slate-900/90 border border-emerald-500/40 text-emerald-300 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold hover:bg-slate-800/90 transition-all active:scale-[0.98]">
+          <i class="fa-solid fa-comments"></i>
+          Pedir conversando
+          <span class="text-[9px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30">Nuevo</span>
+        </button>
 
         <form id="orderForm" onsubmit="return false;" class="space-y-3.5">
           <!-- TELÉFONO CLIENTE / WHATSAPP -->
@@ -1388,6 +1398,49 @@
          almacenamiento y datos del celular) y sin teléfonos (evita que el
          negocio se salga de la plataforma).
          ============================================================ -->
+    <!-- AGENTE CONVERSACIONAL QUE TOMA EL PEDIDO -->
+    <div id="agentePanel" class="hidden fixed inset-0 z-[85] bg-slate-950 flex-col">
+
+      <header class="glass-header px-3 py-3 flex items-center gap-3 shrink-0">
+        <button type="button" onclick="agenteCerrar()"
+          class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 shrink-0">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <div class="min-w-0 flex-1">
+          <h3 class="font-display font-bold text-sm text-white truncate">Pedir conversando</h3>
+          <p class="text-[11px] text-slate-400 truncate">Cuéntame qué necesitas y yo lleno el pedido</p>
+        </div>
+      </header>
+
+      <div id="agenteMensajes" class="flex-1 overflow-y-auto py-3 space-y-2"></div>
+
+      <!-- Aparece solo cuando ya están los tres datos. El pedido NO se envía
+           desde aquí: se pasa al mapa para que la persona confirme el punto. -->
+      <div id="agenteCierre" class="hidden p-3 border-t border-slate-800 bg-slate-900/60 shrink-0">
+        <p id="agenteResumen" class="text-xs text-slate-300 leading-relaxed mb-2.5"></p>
+        <button type="button" onclick="agentePasarAlFormulario()"
+          class="w-full bg-emerald-500 text-slate-950 font-bold py-3 rounded-xl flex items-center justify-center gap-2 text-sm active:scale-[0.98] transition-all">
+          <i class="fa-solid fa-map-location-dot"></i>
+          Revisar el mapa y confirmar
+        </button>
+      </div>
+
+      <div class="p-3 border-t border-slate-800 bg-slate-950 shrink-0">
+        <form onsubmit="event.preventDefault(); agenteEnviar();" class="flex items-end gap-2">
+          <textarea id="agenteTexto" rows="1" maxlength="400" placeholder="Escribe aquí..."
+            class="flex-1 resize-none bg-slate-900 border border-slate-700 rounded-2xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600 outline-none focus:border-emerald-500 max-h-24"
+            oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,96)+'px';"></textarea>
+          <button type="submit" id="agenteEnviarBtn"
+            class="w-11 h-11 shrink-0 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shadow-lg transition-all active:scale-95 disabled:opacity-50">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </form>
+        <p class="text-[9px] text-slate-600 text-center mt-1.5">
+          El pedido no se envía hasta que confirmes el punto en el mapa.
+        </p>
+      </div>
+    </div>
+
     <div id="chatPanel" class="hidden fixed inset-0 z-[80] bg-slate-950 flex-col">
 
       <header class="glass-header px-3 py-3 flex items-center gap-3 shrink-0">
