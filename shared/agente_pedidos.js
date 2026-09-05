@@ -81,6 +81,53 @@ function agentePensando(encender) {
 }
 
 /**
+ * Botones tocables debajo del mensaje del agente (barrios, zona).
+ *
+ * Por qué existen: el agente solo sabe escribir, así que para preguntar el
+ * barrio recitaba los catorce dentro de la frase. Quedaba larguísimo, no se
+ * podía tocar, y en un celular obliga a escribir el nombre a mano y con
+ * faltas. Tocando un botón el dato llega escrito exactamente como lo
+ * necesita el domiciliario.
+ */
+function agenteQuitarOpciones() {
+  const previo = document.getElementById('agenteOpciones');
+  if (previo) previo.remove();
+}
+
+function agentePintarOpciones(lista) {
+  agenteQuitarOpciones();
+  if (!Array.isArray(lista) || !lista.length) return;
+
+  const caja = document.getElementById('agenteMensajes');
+  if (!caja) return;
+
+  const fila = document.createElement('div');
+  fila.id = 'agenteOpciones';
+  fila.className = 'flex flex-wrap gap-1.5 px-3 pt-1';
+
+  lista.forEach((opcion) => {
+    const boton = document.createElement('button');
+    boton.type = 'button';
+    boton.className =
+      'px-3 py-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 ' +
+      'text-emerald-300 text-xs font-semibold active:scale-95 transition-all';
+    boton.innerText = opcion;
+    // Se manda tal cual está escrito en el servidor, no lo que teclee la
+    // persona: así el barrio llega siempre con la misma ortografía.
+    boton.onclick = () => {
+      agenteQuitarOpciones();
+      const entrada = document.getElementById('agenteTexto');
+      if (entrada) entrada.value = opcion;
+      agenteEnviar();
+    };
+    fila.appendChild(boton);
+  });
+
+  caja.appendChild(fila);
+  caja.scrollTop = caja.scrollHeight;
+}
+
+/**
  * Muestra el detalle tecnico de un fallo, en gris y pequeño, debajo del
  * mensaje amable. No reemplaza al mensaje: la persona entiende qué hacer,
  * y quien esté probando puede leer la causa sin abrir herramientas.
@@ -205,6 +252,7 @@ async function agenteEnviar() {
   if (boton) boton.disabled = true;
   if (entrada) { entrada.value = ''; entrada.style.height = 'auto'; }
 
+  agenteQuitarOpciones();
   agentePintar('usuario', texto);
   agenteEstado.historial.push({ rol: 'usuario', texto });
   agentePensando(true);
@@ -258,6 +306,8 @@ async function agenteEnviar() {
 
     // El estado que manda el servidor ya viene validado campo por campo.
     if (datos.estado) agenteEstado.datos = datos.estado;
+
+    agentePintarOpciones(datos.opciones);
 
     if (datos.listo) agenteMostrarCierre();
 

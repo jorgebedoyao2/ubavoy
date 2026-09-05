@@ -68,6 +68,14 @@ BARRIOS = (
     'Villa Rosita', 'Calderitas', 'El Portal', 'Viento Libre',
 )
 
+# Listas que el agente puede ofrecer como botones. El modelo solo dice CUÁL
+# lista quiere mostrar; el contenido sale de aquí. Así no puede inventarse un
+# barrio que no atendemos ni una tarifa que no existe.
+LISTAS = {
+    'barrios': list(BARRIOS),
+    'zona': ['Dentro del centro', 'Fuera del centro'],
+}
+
 INSTRUCCIONES = (
     "Eres quien toma los pedidos de UbaVoy, el servicio de domicilios de "
     "Ubaté, Cundinamarca. Hablas como un vecino amable: de tú, con frases "
@@ -95,11 +103,18 @@ INSTRUCCIONES = (
     "- Escribe el nombre del barrio como aparece en esa lista, aunque la "
     "persona lo abrevie o lo escriba distinto. El domiciliario lee esa "
     "direccion en la calle.\n"
-    "- Si menciona un barrio que no esta en la lista, no lo rechaces de una: "
-    "puede ser otro nombre del mismo sitio. Preguntale cual de los de la "
-    "lista le queda cerca.\n"
     "- Si es una vereda o zona rural, dile con amabilidad que por ahora solo "
     "llegamos al casco urbano de Ubate, y no seas insistente.\n\n"
+    "BOTONES. Nunca recites listas dentro de tu frase: quedan larguisimas y "
+    "no se pueden tocar. En vez de eso usa el campo opciones, y la aplicacion "
+    "las muestra como botones que la persona toca.\n"
+    "- Cuando necesites el barrio, pon opciones en \"barrios\" y escribe algo "
+    "corto como \"Perfecto. ¿En que barrio?\". NO nombres los barrios.\n"
+    "- Cuando necesites saber la zona, pon opciones en \"zona\" y pregunta "
+    "corto. NO escribas las alternativas.\n"
+    "- Si la persona menciona un barrio que no reconoces, ofrece \"barrios\" "
+    "para que escoja el que le quede cerca, sin recitarlos.\n"
+    "- En cualquier otro momento, opciones va en null.\n\n"
     "En cada respuesta devuelves los campos que hayas logrado reunir hasta "
     "ahora (o null si aún no los tienes) y la frase que le vas a decir a la "
     "persona. Para el precio: dentro del centro son 5000 y fuera del centro "
@@ -128,12 +143,20 @@ ESQUEMA = {
                 "type": ["integer", "null"],
                 "description": "5000 dentro del centro, 7000 fuera, null si no se sabe.",
             },
+            "opciones": {
+                "type": ["string", "null"],
+                "enum": ["barrios", "zona", None],
+                "description": ("Lista de botones a mostrar: 'barrios' para "
+                                "escoger barrio, 'zona' para la tarifa, null "
+                                "si la persona debe escribir libremente."),
+            },
         },
         "required": [
             "respuesta",
             "task_description",
             "delivery_address",
             "estimated_price",
+            "opciones",
         ],
         "additionalProperties": False,
     },
@@ -311,10 +334,15 @@ def conversar(carga, uid):
     # "listo" lo calcula el servidor mirando los datos, nunca el modelo: si lo
     # decidiera el modelo, bastaría con que dijera que ya terminó para que se
     # creara un pedido incompleto.
+    # El modelo solo nombra la lista; el contenido sale de LISTAS. Si nombra
+    # cualquier otra cosa, no se muestran botones y la persona escribe.
+    opciones = LISTAS.get(salida.get('opciones'), [])
+
     return {
         'respuesta': (_texto_limpio(salida.get('respuesta'), 400)
                       or '¿Me lo repites, por favor?'),
         'estado': estado,
+        'opciones': [] if faltan == [] else opciones,
         'faltan': faltan,
         'listo': not faltan,
     }
