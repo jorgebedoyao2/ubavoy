@@ -268,12 +268,10 @@
           </div>
         </div>
 
-        <div class="flex items-center justify-between">
-          <span class="flex items-center gap-2 text-xs text-slate-300 font-semibold">
-            <i class="fa-solid fa-volume-high text-amber-400"></i> Alerta Tono Sostenido Pí-Pí-Pí
-          </span>
-          <button onclick="testAlarmPulseOnce()" class="text-[11px] bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm">
-            Probar Alerta 🔊📳
+        <div class="flex justify-end">
+          <button onclick="testAlarmPulseOnce()" type="button"
+            class="text-[11px] text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5">
+            <i class="fa-solid fa-volume-high text-amber-400"></i> Probar alerta
           </button>
         </div>
 
@@ -719,6 +717,8 @@
   <script>
     let isAvailable = false;
     let unsubscribeOrders = null;
+    let unsubscribeMias = null;      // mis carreras, por cuenta
+    let unsubscribeMiasTel = null;   // mis carreras viejas, por telefono
     let isInitialLoad = true;
 
     // MOTOR DE AUDIO EN BUCLE SOSTENIDO PÍ-PÍ-PÍ
@@ -1717,6 +1717,19 @@
       }
     }
 
+    /**
+     * Escucha las carreras. Tres consultas pequeñas en vez de una grande.
+     *
+     * Antes esto escuchaba la colección 'orders' ENTERA y separaba en el
+     * navegador. Funcionaba, pero cobraba una lectura por cada pedido de la
+     * historia cada vez que un domiciliario abría la app: con mil pedidos
+     * acumulados y cinco domiciliarios son cinco mil lecturas solo por
+     * abrirla, y el número crece para siempre porque los entregados nunca
+     * dejan de contar. Era el techo real del plan gratuito.
+     *
+     * Ahora se pide solo lo que se usa. Las tres consultas son de un solo
+     * campo, así que Firestore las indexa solo: no hay nada que configurar.
+     */
     function startDriverFirestoreRealtime() {
       const targetDb = (typeof db !== 'undefined' && db) ? db : (window.db || null);
       if (!isAvailable || !targetDb) return;
@@ -1724,63 +1737,83 @@
       stopDriverFirestoreRealtime();
       isInitialLoad = true;
 
-      const ordersRef = (typeof collection === 'function') ? collection(targetDb, "orders") : targetDb.collection('orders');
+      const ordersRef = targetDb.collection('orders');
+      const driverId = currentDriver.uid;
 
-      unsubscribeOrders = onSnapshot(ordersRef, (snapshot) => {
-        const pendingOrders = [];
-        const assignedOrders = [];
-        const completedOrders = [];
-        const driverId = currentDriver.uid;
+      // Lo que llega de cada consulta se guarda aparte y se repinta junto:
+      // las tres avisan por separado y hay que combinarlas.
+      const mias = new Map();
+      let pendientes = [];
 
-        // Una carrera es "mía" si coincide el uid de la cuenta o el teléfono.
-        // Se comparan ambos porque las carreras viejas se guardaron con el
-        // teléfono antes de que existiera el login con cuenta.
-        const esMia = (data) =>
-          (driverId && data.assigned_driver_id === driverId) ||
-          (currentDriver.uid && data.assigned_driver_id === currentDriver.uid) ||
-          (currentDriver.phone && data.driver_phone === currentDriver.phone);
-
-        snapshot.forEach(docSnap => {
-          const data = typeof docSnap.data === 'function' ? docSnap.data() : docSnap;
-          data.id = docSnap.id;
-
-          const st = data.status ? data.status.toString().toLowerCase() : '';
-
-          if (st === 'pending') {
-            pendingOrders.push(data);
-          } else if ((st === 'assigned' || st === 'in_transit') && esMia(data)) {
-            assignedOrders.push(data);
-          } else if ((st === 'completed' || st === 'delivered') && esMia(data)) {
-            completedOrders.push(data);
-          }
-        });
-
-        // Más recientes primero.
-        completedOrders.sort((a, b) =>
-          String(b.completed_at || b.created_at || '').localeCompare(String(a.completed_at || a.created_at || ''))
-        );
-
+      const repintarPendientes = () => {
         const countBadge = document.getElementById('available-count-badge');
-        if (countBadge) countBadge.innerText = `${pendingOrders.length} Libres`;
+        if (countBadge) countBadge.innerText = `${pendientes.length} Libres`;
 
-        if (pendingOrders.length > 0 && isAvailable) {
-          startSustainedAlarm(pendingOrders[0]);
-        } else {
-          stopSustainedAlarm();
-        }
+        if (pendientes.length > 0 && isAvailable) startSustainedAlarm(pendientes[0]);
+        else stopSustainedAlarm();
 
         isInitialLoad = false;
+        renderOrdersFeed(pendientes);
+      };
 
-        renderOrdersFeed(pendingOrders);
-        renderAssignedOrdersFeed(assignedOrders);
-        renderHistoryFeed(completedOrders);
-      }, (error) => {
-        console.error("❌ Error de Firestore en Driver:", error);
-      });
+      const repintarMias = () => {
+        const todas = [...mias.values()];
+        const enCurso = todas.filter(o => ['assigned', 'in_transit'].includes(o.status));
+        const hechas = todas.filter(o => ['completed', 'delivered'].includes(o.status));
+
+        hechas.sort((a, b) => String(b.completed_at || b.created_at || '')
+          .localeCompare(String(a.completed_at || a.created_at || '')));
+
+        renderAssignedOrdersFeed(enCurso);
+        renderHistoryFeed(hechas);
+      };
+
+      const recoger = (snap, alTerminar) => {
+        snap.forEach(d => {
+          const data = typeof d.data === 'function' ? d.data() : d;
+          data.id = d.id;
+          data.status = (data.status || '').toString().toLowerCase();
+          mias.set(d.id, data);
+        });
+        alTerminar();
+      };
+
+      // 1. Carreras libres. Solo las pendientes, no todo el historial.
+      unsubscribeOrders = ordersRef.where('status', '==', 'pending')
+        .onSnapshot((snap) => {
+          pendientes = [];
+          snap.forEach(d => {
+            const data = typeof d.data === 'function' ? d.data() : d;
+            data.id = d.id;
+            pendientes.push(data);
+          });
+          repintarPendientes();
+        }, (e) => console.error('Error escuchando carreras libres:', e));
+
+      // 2. Las mías, por cuenta.
+      if (driverId) {
+        unsubscribeMias = ordersRef.where('assigned_driver_id', '==', driverId)
+          .onSnapshot((snap) => recoger(snap, repintarMias),
+                      (e) => console.error('Error escuchando mis carreras:', e));
+      }
+
+      // 3. Las mías por teléfono. Existe solo por las carreras viejas, de
+      //    antes de que hubiera cuenta de Google: sin esto, ese historial
+      //    desaparecería de la pantalla del domiciliario.
+      if (currentDriver.phone) {
+        unsubscribeMiasTel = ordersRef.where('driver_phone', '==', currentDriver.phone)
+          .onSnapshot((snap) => recoger(snap, repintarMias),
+                      (e) => console.error('Error escuchando carreras por telefono:', e));
+      }
     }
 
     function stopDriverFirestoreRealtime() {
       stopSustainedAlarm();
+      // Cerrar las tres: un listener abierto sigue cobrando lecturas
+      // aunque nadie esté mirando la pantalla.
+      if (unsubscribeMias) { try { unsubscribeMias(); } catch (e) {} unsubscribeMias = null; }
+      if (unsubscribeMiasTel) { try { unsubscribeMiasTel(); } catch (e) {} unsubscribeMiasTel = null; }
+
       if (unsubscribeOrders) {
         unsubscribeOrders();
         unsubscribeOrders = null;
@@ -2168,6 +2201,23 @@
         return;
       }
 
+      // Una carrera de hace horas no es una carrera: el cliente ya la
+      // resolvio por otro lado o se canso de esperar. Aceptarla cuesta la
+      // comision por nada. Se ocultan, pero se dice cuantas: nada desaparece
+      // en silencio.
+      const HORAS_OCULTAR = 2;
+      const totalRecibidas = orders.length;
+      orders = orders.filter(o => {
+        const e = (typeof esperaEtiquetaEdad === 'function') ? esperaEtiquetaEdad(o) : null;
+        return !e || e.minutos < HORAS_OCULTAR * 60;
+      });
+      const ocultas = totalRecibidas - orders.length;
+      const avisoOcultas = ocultas > 0
+        ? `<p class="text-[10px] text-slate-500 text-center pt-1">
+             ${ocultas} carrera${ocultas === 1 ? '' : 's'} de mas de ${HORAS_OCULTAR} horas sin mostrar
+           </p>`
+        : '';
+
       if (orders.length === 0) {
         feed.innerHTML = `
           <div class="glass-card rounded-2xl p-6 text-center space-y-2">
@@ -2240,7 +2290,7 @@
             </div>
           </div>
         `;
-      }).join('');
+      }).join('') + avisoOcultas;
     }
 
     /** Formatea 5000 -> "$5.000" con separador de miles colombiano. */
@@ -2319,12 +2369,50 @@
       }).join('');
     }
 
+    // Un escucha por carrera activa, para saber si el cliente escribio.
+    const escuchasDeChat = new Map();
+
+    /**
+     * Enciende el punto rojo del chat cuando el cliente escribe, como en
+     * WhatsApp. El punto ya estaba dibujado en la tarjeta, pero nada lo
+     * encendia nunca: chatEscucharNoLeidos() solo se llamaba desde la app del
+     * cliente. El domiciliario no se enteraba de que le habian escrito.
+     */
+    function sincronizarPuntosDeChat(orders) {
+      const vigentes = new Set(orders.map(o => o.id));
+
+      // Cerrar los de carreras que ya no estan en pantalla: un escucha
+      // abierto sigue cobrando lecturas por cada mensaje.
+      escuchasDeChat.forEach((cancelar, id) => {
+        if (!vigentes.has(id)) {
+          try { cancelar(); } catch (e) {}
+          escuchasDeChat.delete(id);
+        }
+      });
+
+      if (!currentDriver.uid || typeof chatEscucharNoLeidos !== 'function') return;
+
+      orders.forEach(order => {
+        if (escuchasDeChat.has(order.id)) return;
+        const cancelar = chatEscucharNoLeidos(order.id, currentDriver.uid, (hayMensaje) => {
+          const punto = document.getElementById('chat-punto-' + order.id);
+          if (!punto) return;
+          punto.classList.toggle('hidden', !hayMensaje);
+        });
+        if (cancelar) escuchasDeChat.set(order.id, cancelar);
+      });
+    }
+
     function renderAssignedOrdersFeed(orders) {
       const section = document.getElementById('assigned-orders-section');
       const feed = document.getElementById('assigned-orders-feed');
 
       if (orders.length === 0) {
         section.classList.add('hidden');
+        // Tambien aqui: al entregar la ultima carrera hay que cerrar sus
+        // escuchas de chat. Si se sale antes, quedan abiertas cobrando
+        // lecturas por cada mensaje de una conversacion ya terminada.
+        sincronizarPuntosDeChat([]);
         return;
       }
 
@@ -2398,6 +2486,8 @@
           </div>
         `;
       }).join('');
+
+      sincronizarPuntosDeChat(orders);
     }
 
     // Comisión que UbaVoy cobra al domiciliario por cada carrera.
