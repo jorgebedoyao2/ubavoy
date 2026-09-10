@@ -61,3 +61,6 @@ firebase-debug.log
 
 .vercel
 .env*
+
+# Disparador de despliegue de Vercel: no debe viajar al repositorio.
+.claude/deploy-hook.txt

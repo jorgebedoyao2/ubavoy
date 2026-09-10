@@ -924,6 +924,25 @@
               .catch((e) => console.error('Perfil: telefono no guardado', e));
           }
 
+          // Le suena el celular a los domiciliarios aunque tengan la app
+          // cerrada. Va sin await y con el error tragado a proposito: el
+          // aviso es una cortesia, no la fuente de verdad. La carrera ya
+          // esta en Firestore y aparece en su lista igual. Si esto fallara
+          // y el cliente viera un error, creeria que su pedido no se creo.
+          (async () => {
+            try {
+              const t = await usuarioActual.getIdToken();
+              await fetch('/api/avisar', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  delivery_address: newOrder.delivery_address,
+                  estimated_price: newOrder.estimated_price
+                })
+              });
+            } catch (e) { console.warn('No se pudo avisar a los domiciliarios:', e); }
+          })();
+
           localStorage.setItem('ubavoy_active_order_id', docRef.id);
           localStorage.setItem('ubavoy_active_order', docRef.id);
 

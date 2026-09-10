@@ -60,6 +60,8 @@
   <script src="/shared/pwa_installer.js"></script>
   <script src="/shared/chat.js"></script>
   <script src="/shared/espera_pedido.js"></script>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script src="/shared/avisos_domiciliario.js"></script>
 
   <style>
     body {
@@ -172,7 +174,7 @@
       </p>
       <p id="acceso-correo" class="hidden text-[11px] font-mono text-amber-400 bg-amber-950/60 px-3 py-1 rounded-lg border border-amber-800 mb-4"></p>
 
-      <button type="button" id="acceso-btn-entrar" onclick="handleGoogleAuthDriver()"
+      <button type="button" id="acceso-btn-entrar" onclick="handleGoogleSignInDriver()"
         class="w-full max-w-xs mt-3 py-3.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-800 font-bold text-sm flex items-center justify-center gap-2.5 shadow-lg transition-all active:scale-95">
         <i class="fa-brands fa-google text-lg"></i> Entrar con Google
       </button>
@@ -285,6 +287,18 @@
 
       <!-- MIS CARRERAS ACTIVAS EN CURSO (VALIDACIÓN CON PIN) -->
       <div id="assigned-orders-section" class="hidden space-y-3">
+        <!-- ====== AVISOS CON LA APP CERRADA ======
+             Solo aparece si faltan por activar. Con el permiso concedido se
+             oculta sola y no estorba. -->
+        <div id="avisos-banner" class="hidden glass-card rounded-2xl p-4 border border-amber-500/50 space-y-2.5 bg-amber-950/40">
+          <p id="avisos-titulo" class="font-display font-bold text-sm text-amber-300"></p>
+          <p id="avisos-texto" class="text-[11px] text-slate-300 leading-relaxed"></p>
+          <button type="button" id="avisos-boton" onclick="avisosPedirPermiso()"
+            class="w-full bg-amber-500 text-slate-950 font-bold py-2.5 rounded-xl text-xs active:scale-[0.98] transition-all">
+            Activar avisos
+          </button>
+        </div>
+
         <div class="flex items-center justify-between px-1">
           <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
             <i class="fa-solid fa-motorcycle text-emerald-400"></i> Mi Carrera Activa en Curso
@@ -731,6 +745,10 @@
     let audioUnlocked = false;
 
     document.addEventListener('DOMContentLoaded', () => {
+      // Arranca el SDK de avisos. No pide permiso todavia: eso se
+      // hace desde la tarjeta, tras iniciar sesion y con explicacion.
+      if (typeof avisosIniciar === 'function') avisosIniciar();
+
       updateHeaderUserUI();
       registerServiceWorker();
 
@@ -795,6 +813,11 @@
             escucharMiPerfil(user.uid);
             escucharSolicitudesPendientes(user.uid);
             refrescarPuertaDeAudio();
+            // Marca este celular como de un domiciliario para que le lleguen
+            // los avisos aunque tenga la app cerrada.
+            if (typeof avisosEnlazarDomiciliario === 'function') {
+              avisosEnlazarDomiciliario(user.uid);
+            }
           } else {
             detenerCanalDeCarreras();
             mostrarEstadoAcceso('pendiente');
@@ -1277,6 +1300,7 @@
 
     async function cerrarSesionDomiciliario() {
       try {
+        if (typeof avisosDesenlazar === 'function') avisosDesenlazar();
         await signOutUser();
         showToast('Sesión cerrada');
       } catch (e) {

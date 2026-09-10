@@ -53,6 +53,14 @@ def _token_de(cabecera: str | None) -> str:
     return cabecera[7:].strip() if cabecera.lower().startswith('bearer ') else cabecera.strip()
 
 
+def _estado_de_avisos():
+    try:
+        from api import avisos
+        return avisos.estado()
+    except Exception as e:
+        return {"error": str(e)[:120]}
+
+
 @app.get("/api/health")
 def salud():
     """Diagnóstico rápido del backend."""
@@ -75,6 +83,9 @@ def salud():
             "entorno_vercel": os.environ.get('VERCEL_ENV', 'desconocido'),
             "rama": os.environ.get('VERCEL_GIT_COMMIT_REF', 'desconocida'),
         },
+        # Mismo criterio que con el agente: un fallo de configuración se tiene
+        # que poder ver abriendo una dirección, no leyendo la consola.
+        "avisos": _estado_de_avisos(),
         "momento": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -158,6 +169,35 @@ async def informe_desde_navegador(
     }
 
     return HTMLResponse(panel.construir(indicadores, figuras))
+
+
+@app.post("/api/avisar")
+async def avisar_a_domiciliarios(
+    carga: dict,
+    authorization: str | None = Header(default=None),
+):
+    """
+    Le suena el celular a los domiciliarios cuando entra una carrera.
+
+    Lo llama el navegador del cliente justo después de crear el pedido. No
+    puede hacerlo el navegador por su cuenta contra OneSignal: la llave de
+    envío quedaría a la vista y cualquiera podría difundir avisos a todos los
+    domiciliarios.
+
+    El aviso no es la fuente de verdad, es una cortesía: si falla, la carrera
+    igual está en Firestore y aparece en la lista del domiciliario. Por eso
+    el cliente nunca ve un error si esto no sale.
+    """
+    from api import avisos, identidad
+
+    autorizado, uid, detalle = identidad.verificar_usuario(_token_de(authorization))
+    if not autorizado:
+        raise HTTPException(status_code=401, detail=detalle)
+
+    try:
+        return avisos.avisar_carrera_nueva(carga, uid)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @app.post("/api/agente")
