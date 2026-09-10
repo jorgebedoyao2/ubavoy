@@ -412,10 +412,19 @@
             <i class="fa-solid fa-shield-halved text-purple-400"></i> Auditoría Criptográfica de Operaciones
           </h3>
 
-          <button type="button" onclick="limpiarPedidosDePrueba()"
-            class="text-[10px] font-bold text-rose-300 bg-rose-950/70 hover:bg-rose-900 border border-rose-800 px-2.5 py-1 rounded-lg flex items-center gap-1">
-            <i class="fa-solid fa-broom"></i> Limpiar pruebas
-          </button>
+          <div class="flex items-center gap-1.5">
+            <!-- Cierra pendientes que ya nadie va a atender. NO borra: un
+                 pedido real es historial contable. Ver la funcion. -->
+            <button type="button" onclick="cerrarPendientesViejas()"
+              class="text-[10px] font-bold text-amber-300 bg-amber-950/70 hover:bg-amber-900 border border-amber-800 px-2.5 py-1 rounded-lg flex items-center gap-1">
+              <i class="fa-solid fa-clock-rotate-left"></i> Cerrar pendientes viejas
+            </button>
+
+            <button type="button" onclick="limpiarPedidosDePrueba()"
+              class="text-[10px] font-bold text-rose-300 bg-rose-950/70 hover:bg-rose-900 border border-rose-800 px-2.5 py-1 rounded-lg flex items-center gap-1">
+              <i class="fa-solid fa-broom"></i> Limpiar pruebas
+            </button>
+          </div>
         </div>
 
         <div class="glass-card rounded-2xl p-3 space-y-3 border border-purple-500/30">
@@ -1238,6 +1247,91 @@
      * explícitamente PRUEBA o DEMO en su descripción: jamás un pedido real.
      * Pide confirmación y enumera lo que va a borrar antes de hacerlo.
      */
+    // Horas tras las cuales una carrera pendiente ya no es una carrera.
+    const HORAS_PARA_CERRAR = 2;
+
+    /**
+     * Cierra las carreras que llevan horas pendientes y que nadie va a tomar.
+     *
+     * Por qué hace falta que exista este botón: un pedido que ningún
+     * domiciliario toma se queda en 'pending' para siempre, y NADIE puede
+     * cerrarlo. Las reglas solo permiten cancelar al cliente que lo creó
+     * —que puede no volver a abrir la app nunca— o al administrador. Sin
+     * esto, esos pedidos se acumulan en la lista del domiciliario y ensucian
+     * la operación.
+     *
+     * CANCELA, NO BORRA. Es la diferencia con "Limpiar pruebas": aquello
+     * elimina datos inventados; esto cierra pedidos reales de clientes
+     * reales, y esos son historial contable del negocio. Quedan como
+     * 'cancelled' y siguen contando en el informe.
+     */
+    async function cerrarPendientesViejas() {
+      try {
+        // Solo se piden las pendientes, no la colección entera: traer todo el
+        // historial para encontrar unas pocas cuesta una lectura por pedido.
+        const snap = await db.collection('orders').where('status', '==', 'pending').get();
+
+        const limite = Date.now() - HORAS_PARA_CERRAR * 60 * 60 * 1000;
+        const aCerrar = [];
+
+        snap.forEach(d => {
+          const data = d.data();
+          const crudo = data.created_at;
+          let nacio = null;
+          if (crudo && typeof crudo.toDate === 'function') nacio = crudo.toDate().getTime();
+          else if (crudo) { const t = new Date(crudo).getTime(); nacio = isNaN(t) ? null : t; }
+
+          // Sin fecha no se toca: es preferible dejar un pedido de más que
+          // cancelar el de alguien que está esperando en este momento.
+          if (nacio === null || nacio > limite) return;
+
+          const horas = Math.floor((Date.now() - nacio) / 3600000);
+          aCerrar.push({
+            ref: d.ref,
+            texto: String(data.task_description || 'Mandado').slice(0, 40),
+            horas,
+          });
+        });
+
+        if (!aCerrar.length) {
+          showToast(`No hay pendientes de más de ${HORAS_PARA_CERRAR} horas`);
+          return;
+        }
+
+        const listado = aCerrar.slice(0, 8)
+          .map(o => `· ${o.texto} (hace ${o.horas} h)`).join('\n');
+        const confirmar = confirm(
+          `Se van a CANCELAR ${aCerrar.length} carreras pendientes de más de ` +
+          `${HORAS_PARA_CERRAR} horas:\n\n${listado}` +
+          (aCerrar.length > 8 ? `\n· … y ${aCerrar.length - 8} más` : '') +
+          `\n\nNo se borran: quedan como canceladas en el historial.\n¿Continuar?`
+        );
+        if (!confirmar) return;
+
+        // Firestore admite 500 operaciones por lote. Se parte para que no
+        // falle en silencio el día que haya muchas acumuladas.
+        let cerradas = 0;
+        for (let i = 0; i < aCerrar.length; i += 400) {
+          const trozo = aCerrar.slice(i, i + 400);
+          const lote = db.batch();
+          trozo.forEach(o => lote.update(o.ref, {
+            status: 'cancelled',
+            cancelled_at: new Date().toISOString(),
+            // Distingue esta limpieza de una cancelación del cliente: en el
+            // informe no significan lo mismo.
+            cancelled_by: 'admin_vencimiento',
+          }));
+          await lote.commit();
+          cerradas += trozo.length;
+        }
+
+        showToast(`${cerradas} carreras pendientes quedaron cerradas`);
+      } catch (e) {
+        console.error('Error cerrando pendientes viejas:', e);
+        showToast('No se pudo cerrar: ' + (e.code || e.message), 'error');
+      }
+    }
+
     async function limpiarPedidosDePrueba() {
       try {
         const snap = await db.collection('orders').get();
