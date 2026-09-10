@@ -40,16 +40,6 @@ _uso = {}
 MAX_AVISOS_POR_HORA = 12
 
 
-def _cabecera_autorizacion(llave: str) -> str:
-    """
-    OneSignal cambió el formato: las llaves nuevas (os_v2_...) van con 'Key' y
-    las antiguas con 'Basic'. Se detecta por el prefijo en vez de obligar a
-    configurar cuál es, que es un detalle que nadie recuerda seis meses
-    después.
-    """
-    return ('Key ' if llave.startswith('os_v2_') else 'Basic ') + llave
-
-
 def _pasa_el_freno(uid: str) -> bool:
     ahora = time.time()
     marcas = [t for t in _uso.get(uid, []) if ahora - t < 3600]
@@ -67,31 +57,56 @@ def _texto_corto(valor, maximo: int) -> str:
     return ' '.join(valor.split()).strip()[:maximo]
 
 
+def _intentar(carga: dict, llave: str, esquema: str) -> dict:
+    peticion = urllib.request.Request(
+        URL_ONESIGNAL,
+        data=json.dumps(carga).encode('utf-8'),
+        headers={
+            'Authorization': esquema + ' ' + llave,
+            'Content-Type': 'application/json; charset=utf-8',
+        },
+        method='POST',
+    )
+    with urllib.request.urlopen(peticion, timeout=15) as r:
+        return json.loads(r.read().decode('utf-8'))
+
+
 def _enviar(carga: dict) -> dict:
+    """
+    Manda el aviso probando los dos formatos de autorización.
+
+    Por qué no se elige uno y ya: OneSignal cambió el esquema. Las llaves
+    nuevas (os_v2_...) van con 'Key' y las antiguas con 'Basic', pero la
+    documentación del endpoint moderno solo menciona 'Key' y no aclara si
+    acepta las antiguas. Acertar a ciegas aquí significaría que el
+    domiciliario no recibe carreras y nadie sabría por qué.
+
+    Se intenta con el esquema que corresponde al formato de la llave y, si el
+    servidor rechaza la credencial, se reintenta con el otro. Un solo
+    reintento, y solo ante 401/403: cualquier otro error es real y se reporta.
+    """
     llave = os.environ.get('ONESIGNAL_REST_API_KEY', '').strip()
     if not llave:
         raise RuntimeError(
             'Falta ONESIGNAL_REST_API_KEY en las variables de entorno de Vercel'
         )
 
-    peticion = urllib.request.Request(
-        URL_ONESIGNAL,
-        data=json.dumps(carga).encode('utf-8'),
-        headers={
-            'Authorization': _cabecera_autorizacion(llave),
-            'Content-Type': 'application/json; charset=utf-8',
-        },
-        method='POST',
-    )
+    primero = 'Key' if llave.startswith('os_v2_') else 'Basic'
+    segundo = 'Basic' if primero == 'Key' else 'Key'
 
-    try:
-        with urllib.request.urlopen(peticion, timeout=15) as r:
-            return json.loads(r.read().decode('utf-8'))
-    except urllib.error.HTTPError as e:
-        detalle = e.read().decode('utf-8', 'replace')[:400]
-        raise RuntimeError('OneSignal respondio ' + str(e.code) + ': ' + detalle)
-    except Exception as e:
-        raise RuntimeError('No se pudo hablar con OneSignal: ' + str(e))
+    for intento, esquema in enumerate((primero, segundo)):
+        try:
+            return _intentar(carga, llave, esquema)
+        except urllib.error.HTTPError as e:
+            detalle = e.read().decode('utf-8', 'replace')[:400]
+            if e.code in (401, 403) and intento == 0:
+                continue  # la credencial no gustó: se prueba el otro esquema
+            raise RuntimeError(
+                'OneSignal respondio ' + str(e.code) + ' con esquema '
+                + esquema + ': ' + detalle
+            )
+        except Exception as e:
+            raise RuntimeError('No se pudo hablar con OneSignal: ' + str(e))
 
 
 def avisar_carrera_nueva(carga: dict, uid: str) -> dict:
