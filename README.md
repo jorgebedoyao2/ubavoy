@@ -94,4 +94,33 @@ En el panel de Vercel, puedes crear 3 proyectos diferentes conectados al mismo r
 
 ---
 
+## 🎨 Herramientas de diseño (skills de Claude Code)
+
+El proyecto usa **UI/UX Pro Max**, un conjunto de *skills* de diseño de código
+abierto (licencia MIT) que aporta criterios de tipografía, color, accesibilidad,
+jerarquía visual y patrones de interacción al construir o revisar pantallas.
+
+Repositorio: https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
+
+**No está dentro de este repositorio a propósito.** Se instala en el equipo, no
+en el proyecto, por dos razones: pesa 11 MB de datos de diseño que no tienen que
+ver con el negocio de domicilios, y así queda disponible en cualquier otro
+proyecto sin reinstalarla.
+
+### Cómo instalarla en un equipo nuevo
+
+```bash
+git clone --depth 1 https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git /tmp/uiux
+cp -r /tmp/uiux/.claude/skills/* ~/.claude/skills/
+```
+
+Skills que instala: `ui-ux-pro-max` (la principal), `design`, `design-system`,
+`brand`, `ui-styling`, `banner-design` y `slides`.
+
+> Revisado antes de instalar: licencia MIT, sin `eval`, `exec` ni `os.system`.
+> Sus scripts de Python solo se ejecutan si se invocan explícitamente; ninguno
+> corre solo. Los que acceden a internet (Pexels, Google Fonts) son opcionales.
+
+---
+
 *UbaVoy Ubaté 2026 - Arquitectura Multiapp PWA*
